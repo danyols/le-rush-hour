@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0e17">
+  <title>Rush Hour AR</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+    video { display: none; }
+
+    .hud { position: fixed; left: 0; right: 0; padding: 12px 16px; pointer-events: none; }
+    .hud button, .hud label { pointer-events: auto; } /* taps elsewhere reach the camera view (for tuning) */
+    .top { top: 0; padding-top: max(12px, env(safe-area-inset-top));
+      background: linear-gradient(#0b0e17e6, #0b0e1700); display: grid; gap: 6px; }
+    .top .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .top .title { font-weight: 800; letter-spacing: 0.02em; }
+    .bottom { bottom: 0; padding-bottom: max(16px, env(safe-area-inset-bottom));
+      background: linear-gradient(#0b0e1700, #0b0e17e6); display: grid; gap: 10px; }
+    .mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .mini div { font-size: 0.72rem; color: var(--muted); }
+    .mini .bar { height: 6px; border-radius: 99px; background: #ffffff1f; overflow: hidden; margin-top: 3px; }
+    .mini .bar i { display: block; height: 100%; transition: width 0.15s linear; }
+    .hint { position: fixed; top: 45%; left: 16px; right: 16px; text-align: center; font-weight: 650;
+      text-shadow: 0 1px 6px #000; transition: opacity 0.3s; pointer-events: none; }
+
+    #intro { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--bg); z-index: 5; }
+    #intro .box { max-width: 420px; text-align: center; display: grid; gap: 14px; }
+    #intro h1 { margin: 0; font-size: 2.2rem; }
+    #intro p { margin: 0; color: var(--muted); line-height: 1.5; }
+    #intro a { color: var(--accent); }
+    #intro .err { color: var(--danger); }
+
+    .tune-btn { padding: 0.35rem 0.6rem; font-size: 0.8rem; border-radius: 10px; display: none; }
+    body.color-mode .tune-btn { display: inline-block; }
+    #tune { display: none; gap: 10px; text-align: center; }
+    body.tuning #tune { display: grid; }
+    body.tuning .mini, body.tuning #actions { display: none; }
+    #tune .ask { font-weight: 700; font-size: 1.05rem; }
+    #tune .chip { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%; vertical-align: -0.1em; margin-right: 0.3em; }
+    #tune label { color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <video id="cam" playsinline muted autoplay></video>
+
+  <div class="hud top">
+    <div class="row">
+      <span class="title">⚡ Rush Hour <button class="btn tune-btn" id="tuneBtn">🎯 Tune colors</button></span>
+      <div class="stats">
+        <div class="stat"><b id="time">-:--</b><span>left</span></div>
+        <div class="stat"><b id="uptime">100%</b><span>uptime</span></div>
+        <div class="stat"><b id="charges">0</b><span>delivered</span></div>
+      </div>
+    </div>
+    <div class="event" id="event">Connecting…</div>
+  </div>
+
+  <div class="hint" id="hint">Point your camera at the city</div>
+
+  <div class="hud bottom">
+    <div class="mini" id="mini"></div>
+    <div class="actions" id="actions"></div>
+    <div id="tune">
+      <div class="ask" id="tuneAsk"></div>
+      <label><input type="checkbox" id="showMask" checked> Show what the phone detects</label>
+      <div class="actions">
+        <button class="btn small" id="tuneSkip">Skip</button>
+        <button class="btn small" id="tuneReset">Reset colors</button>
+        <button class="btn small primary" id="tuneDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="intro">
+    <div class="box">
+      <h1>⚡ Rush Hour</h1>
+      <p>Three buildings are running out of power. Our robot carries the generator to recharge them -
+        point your phone at the city to see their energy, and refuel the generator to keep the lights on.</p>
+      <button class="btn primary" id="go">Start AR camera</button>
+      <p class="err" id="err"></p>
+      <p><a href="/board">No camera? Play on the 2D board</a></p>
+    </div>
+  </div>
+
+  <script src="/static/vendor/js-aruco2/cv.js"></script>
+  <script src="/static/vendor/js-aruco2/aruco.js"></script>
+  <script src="/static/colortrack.js"></script>
+  <script src="/static/game.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const canvas = $("view"), ctx = canvas.getContext("2d");
+    const video = $("cam");
+    const work = document.createElement("canvas"); // downscaled frame for marker detection
+    const workCtx = work.getContext("2d", { willReadFrequently: true });
+    const maskCanvas = document.createElement("canvas"); // "what the phone detects" overlay
+    const maskCtx = maskCanvas.getContext("2d");
+    const detector = new AR.Detector({ dictionaryName: "ARUCO_MIP_36h12" });
+    const DETECT_MAX = { cards: 640, color: 480 }; // longest side of the detection frame, px
+    const KEEP_MS = 400;      // keep drawing a marker this long after it was last seen
+    const SMOOTH = 0.45;      // corner smoothing (1 = no smoothing)
+    const COLORS_KEY = "rushhour.colors";
+    const urlTrack = new URLSearchParams(location.search).get("track"); // ?track=color|cards overrides the server
+
+    let game = null;
+    let track = urlTrack || "color";
+    const tracks = {}; // building id -> { corners: [{x,y}x4], seen: ms }
+    let lastFrame = null; // { image, W, H, dw, dh } for tap-to-calibrate
+
+    function loadProfiles() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(COLORS_KEY) || "null");
+        if (saved) return { ...ColorTrack.DEFAULTS, ...saved };
+      } catch (e) {}
+      return { ...ColorTrack.DEFAULTS };
+    }
+    let profiles = loadProfiles();
+    function saveProfiles() {
+      try { localStorage.setItem(COLORS_KEY, JSON.stringify(profiles)); } catch (e) {}
+    }
+
+    // ---------- game state -> HUD ----------
+    RushHour.onState((s) => {
+      game = s;
+      RushHour.renderActions($("actions"), s);
+      if (!s) { $("event").textContent = "Disconnected - reconnecting…"; return; }
+      track = urlTrack || s.track || "color";
+      document.body.classList.toggle("color-mode", track === "color");
+      $("hint").textContent = track === "color" ? "Point your camera at the colored rings" : "Point your camera at the building cards";
+      $("time").textContent = RushHour.fmtTime(s.time_left);
+      $("uptime").textContent = `${Math.round(s.uptime * 100)}%`;
+      $("charges").textContent = s.charges;
+      $("event").textContent = s.event;
+      const mini = $("mini");
+      if (!mini.children.length)
+        mini.innerHTML = s.buildings.map((b) => `<div>${b.name}<div class="bar"><i style="background:${b.color}"></i></div></div>`).join("");
+      s.buildings.forEach((b, i) => { mini.children[i].querySelector("i").style.width = `${b.energy}%`; });
+    });
+
+    // ---------- color tuning (tap each ring once) ----------
+    let tuneStep = -1; // index into ColorTrack.COLORS, -1 = not tuning
+    function showTuneStep() {
+      if (tuneStep >= ColorTrack.COLORS.length) return endTuning();
+      const color = ColorTrack.COLORS[tuneStep];
+      const b = game && RushHour.byId(game, color);
+      $("tuneAsk").innerHTML = `<span class="chip" style="background:${b ? b.color : color}"></span>Tap the ${color.toUpperCase()} ring`;
+    }
+    function endTuning() {
+      tuneStep = -1;
+      document.body.classList.remove("tuning");
+    }
+    $("tuneBtn").onclick = () => { tuneStep = 0; document.body.classList.add("tuning"); showTuneStep(); };
+    $("tuneSkip").onclick = () => { tuneStep++; showTuneStep(); };
+    $("tuneDone").onclick = endTuning;
+    $("tuneReset").onclick = () => {
+      profiles = { ...ColorTrack.DEFAULTS };
+      try { localStorage.removeItem(COLORS_KEY); } catch (e) {}
+      tuneStep = 0;
+      showTuneStep();
+    };
+    canvas.addEventListener("click", (e) => {
+      if (tuneStep < 0 || !lastFrame) return;
+      const { image, W, H, dw, dh } = lastFrame;
+      const x = ((e.clientX * W) / innerWidth) * (dw / W), y = ((e.clientY * H) / innerHeight) * (dh / H);
+      const color = ColorTrack.COLORS[tuneStep];
+      profiles[color] = ColorTrack.profileFromSample(color, ColorTrack.sample(image, x, y, 2));
+      saveProfiles();
+      tuneStep++;
+      showTuneStep();
+    });
+
+    // ---------- camera ----------
+    $("go").onclick = async () => {
+      $("err").textContent = "";
+      if (!navigator.mediaDevices?.getUserMedia) {
+        $("err").textContent = "This browser can't open the camera here (it needs the https link from the QR code).";
+        return;
+      }
+      try {
+        video.srcObject = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        await video.play();
+        $("intro").style.display = "none";
+        requestAnimationFrame(frame);
+      } catch (e) {
+        $("err").textContent = `Camera unavailable: ${e.message || e.name}. Allow camera access and try again.`;
+      }
+    };
+
+    // ---------- render loop ----------
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(innerWidth * dpr);
+      canvas.height = Math.round(innerHeight * dpr);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    function updateTrack(id, pts, now) {
+      const t = tracks[id];
+      if (t && now - t.seen < KEEP_MS) {
+        if (track === "color") pts = ColorTrack.align(t.corners, pts);
+        t.corners = t.corners.map((p, i) => ({ x: p.x + (pts[i].x - p.x) * SMOOTH, y: p.y + (pts[i].y - p.y) * SMOOTH }));
+      } else tracks[id] = { corners: pts };
+      tracks[id].seen = now;
+    }
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw) return;
+      const W = canvas.width, H = canvas.height;
+      // "cover" crop of the video that fills the screen
+      const scale = Math.max(W / vw, H / vh);
+      const sw = W / scale, sh = H / scale, sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+
+      // detect on a downscaled copy of exactly the visible region
+      const k = Math.min(1, DETECT_MAX[track === "color" ? "color" : "cards"] / Math.max(sw, sh));
+      const dw = Math.round(sw * k), dh = Math.round(sh * k);
+      if (work.width !== dw || work.height !== dh) { work.width = dw; work.height = dh; }
+      workCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+      const image = workCtx.getImageData(0, 0, dw, dh);
+      lastFrame = { image, W, H, dw, dh };
+      const toScreen = (c) => ({ x: (c.x * W) / dw, y: (c.y * H) / dh });
+
+      if (track === "color") {
+        const showMask = tuneStep >= 0 && $("showMask").checked;
+        const mask = showMask ? new ImageData(dw, dh) : null;
+        const found = ColorTrack.detect(image, profiles, mask && mask.data);
+        for (const color of ColorTrack.COLORS)
+          if (found[color]) updateTrack(color, found[color].corners.map(toScreen), now);
+        if (mask) {
+          if (maskCanvas.width !== dw || maskCanvas.height !== dh) { maskCanvas.width = dw; maskCanvas.height = dh; }
+          maskCtx.putImageData(mask, 0, 0);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(maskCanvas, 0, 0, W, H);
+          ctx.imageSmoothingEnabled = true;
+        }
+      } else if (game) {
+        for (const m of detector.detect(image)) {
+          const b = game.buildings.find((x) => x.marker_id === m.id);
+          if (b) updateTrack(b.id, m.corners.map(toScreen), now);
+        }
+      }
+
+      let visible = 0;
+      if (game && tuneStep < 0) {
+        for (const b of game.buildings) {
+          const t = tracks[b.id];
+          if (t && now - t.seen < KEEP_MS) { drawBuilding(b, t.corners, now); visible++; }
+        }
+      }
+      $("hint").style.opacity = visible || tuneStep >= 0 ? 0 : 1;
+    }
+
+    // ---------- AR drawing ----------
+    function quadPath(c) {
+      ctx.beginPath();
+      ctx.moveTo(c[0].x, c[0].y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(c[i].x, c[i].y);
+      ctx.closePath();
+    }
+
+    // ellipse inscribed in the quad (which is a rotated rectangle for color blobs), scaled by k
+    function ellipsePath(c, k) {
+      const cx = (c[0].x + c[2].x) / 2, cy = (c[0].y + c[2].y) / 2;
+      const ax = (c[1].x - c[0].x) / 2, ay = (c[1].y - c[0].y) / 2;
+      const bx = (c[2].x - c[1].x) / 2, by = (c[2].y - c[1].y) / 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, Math.hypot(ax, ay) * k, Math.hypot(bx, by) * k, Math.atan2(ay, ax), 0, Math.PI * 2);
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
+    }
+
+    function drawBuilding(b, c, now) {
+      const s = game;
+      const cx = c.reduce((a, p) => a + p.x, 0) / 4, cy = c.reduce((a, p) => a + p.y, 0) / 4;
+      const size = (Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y) + Math.hypot(c[2].x - c[1].x, c[2].y - c[1].y)) / 2;
+      // rings are small on screen, so give the building a minimum size
+      const bs = Math.max(size * (track === "color" ? 1.5 : 1), 40 * (canvas.width / innerWidth));
+      const e = b.energy / 100;
+      const dark = b.energy <= 0;
+      const low = !dark && b.energy < 25;
+      const flicker = low && Math.sin(now / 60) > 0.3 ? 0.35 : 1;
+      const isTarget = s.phase === "dispatch" && s.target === b.id;
+      const hasGen = s.generator_at === b.id && !isTarget;
+      const color = dark ? "#555b6e" : b.color;
+
+      ctx.save();
+
+      // glowing floor tile on the marker itself (perspective-correct card, or an ellipse around a ring)
+      if (track === "color") ellipsePath(c, 1.35);
+      else quadPath(c);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = dark ? 0.35 : (0.25 + 0.55 * e) * flicker;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = Math.max(2, size * 0.05);
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = dark ? 0 : 25 * e * flicker;
+      ctx.stroke();
+
+      // pulsing ring when the robot is on its way here
+      if (isTarget) {
+        const p = (now % 1200) / 1200;
+        ctx.globalAlpha = 1 - p;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, bs * (0.8 + p), bs * (0.45 + 0.55 * p), 0, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(3, bs * 0.06);
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      // burst when just charged
+      if (b.just_charged) {
+        const p = (now % 700) / 700;
+        ctx.globalAlpha = 1 - p;
+        ctx.beginPath();
+        ctx.arc(cx, cy - bs, bs * (0.6 + 1.6 * p), 0, Math.PI * 2);
+        ctx.lineWidth = bs * 0.1;
+        ctx.strokeStyle = b.color;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // the tower, rising straight up from the card
+      const tw = bs * 0.8, th = bs * 1.9;
+      const tx = cx - tw / 2, ty = cy - th;
+      ctx.shadowBlur = dark ? 0 : 30 * e * flicker;
+      ctx.shadowColor = color;
+      roundRect(tx, ty, tw, th, bs * 0.06);
+      ctx.fillStyle = "#151a28e6";
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, bs * 0.035);
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // windows: lit share follows the energy level, filling from the bottom
+      const cols = 3, rows = 6, lit = Math.round(e * cols * rows);
+      const gx = tw * 0.14, gy = th * 0.06, ww = (tw - gx * (cols + 1)) / cols, wh = (th - gy * (rows + 1)) / rows;
+      for (let r = 0; r < rows; r++)
+        for (let col = 0; col < cols; col++) {
+          const idx = (rows - 1 - r) * cols + col;
+          ctx.fillStyle = idx < lit ? color : "#2a3247";
+          ctx.globalAlpha = idx < lit ? flicker : 0.9;
+          ctx.fillRect(tx + gx + col * (ww + gx), ty + gy + r * (wh + gy), ww, wh);
+        }
+      ctx.globalAlpha = 1;
+
+      // label + energy bar above the tower
+      const fs = Math.max(12, bs * 0.22);
+      const by = ty - fs * 1.1;
+      ctx.font = `700 ${fs}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "#000";
+      ctx.shadowBlur = 6;
+      const status = dark ? "BLACKOUT" : `${Math.round(b.energy)}%`;
+      ctx.fillText(`${b.name} · ${status}`, cx, by - fs * 0.5);
+      ctx.shadowBlur = 0;
+      const bw = Math.max(tw * 1.4, 60), bh = Math.max(6, fs * 0.45);
+      roundRect(cx - bw / 2, by, bw, bh, bh / 2);
+      ctx.fillStyle = "#ffffff30";
+      ctx.fill();
+      if (!dark) {
+        roundRect(cx - bw / 2, by, bw * e, bh, bh / 2);
+        ctx.fillStyle = b.color;
+        ctx.fill();
+      }
+
+      // badges
+      if (isTarget || hasGen) {
+        const text = isTarget ? "⚡ INCOMING" : "🔋 generator";
+        ctx.font = `800 ${fs * 0.85}px system-ui, sans-serif`;
+        const w = ctx.measureText(text).width + fs;
+        const yy = cy + bs * 0.55;
+        roundRect(cx - w / 2, yy, w, fs * 1.4, fs * 0.7);
+        ctx.fillStyle = isTarget ? "#fff" : b.color;
+        ctx.fill();
+        ctx.fillStyle = "#0b0e17";
+        ctx.fillText(text, cx, yy + fs * 1.0);
+      }
+      ctx.restore();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rush Hour Markers</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { padding: 16px; }
+    .note { max-width: 720px; margin: 0 auto 16px; color: var(--muted); line-height: 1.5; }
+    .note b { color: var(--text); }
+    .sheet { display: flex; flex-wrap: wrap; gap: 12mm; justify-content: center; }
+    .card { background: #fff; color: #000; padding: 4mm; border-radius: 3mm; text-align: center; border-top: 6mm solid var(--c); }
+    .card svg { display: block; width: var(--size); height: var(--size); }
+    .card .label { font-weight: 800; font-size: 14pt; margin-top: 2mm; }
+    .card .id { font-size: 9pt; color: #555; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .note { display: none; }
+      .card { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <p><b>Print this page at 100% scale</b> (turn off "fit to page"). Each black square should come out
+      <b id="cm"></b> wide. Use <code>?cm=8</code> in the address bar for a different size.</p>
+    <p>Put each card next to its building marker on the table, keeping the card <b>flat and outside the robot
+      cameras' view</b> so the trained policy doesn't see something new. Don't cover the white border around the black square.</p>
+  </div>
+  <div class="sheet" id="sheet"></div>
+
+  <script src="/static/vendor/js-aruco2/cv.js"></script>
+  <script src="/static/vendor/js-aruco2/aruco.js"></script>
+  <script>
+    const BUILDINGS = [
+      { id: 0, name: "Red Tower", color: "#ff4d5e" },
+      { id: 1, name: "Green Lab", color: "#3ddc84" },
+      { id: 2, name: "Yellow Market", color: "#ffd23f" },
+    ];
+    const cm = parseFloat(new URLSearchParams(location.search).get("cm")) || 6;
+    document.getElementById("cm").textContent = `${cm} cm`;
+    const dict = new AR.Dictionary("ARUCO_MIP_36h12");
+    for (const b of BUILDINGS) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.setProperty("--c", b.color);
+      // generateSVG adds a 1-cell white margin around the 8-cell marker; size the svg so the black part is `cm`.
+      card.style.setProperty("--size", `${(cm * 10) / 8}cm`);
+      card.innerHTML = dict.generateSVG(b.id) + `<div class="label">${b.name}</div><div class="id">marker ${b.id}</div>`;
+      document.getElementById("sheet").appendChild(card);
+    }
+  </script>
+</body>
+</html>
