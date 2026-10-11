@@ -1,4 +1,4 @@
-# le-rush-hour
+# Sterile Instrument Return
 
 Hands-free instrument hand-off with an SO-101 arm. The operator picks an instrument tray by turning
 their head; the arm runs the trained LeRobot policy for that tray's marker, then returns to rest
