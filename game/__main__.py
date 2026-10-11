@@ -3,12 +3,13 @@
     python -m game                      # mock robot + public HTTPS link and QR code
     python -m game --worker manual      # operator taps Done on /board?admin=1 (teleop / fallback)
     python -m game --no-tunnel          # local only (phones can't use the camera over plain http)
+    python -m game --track cards        # find buildings by printed marker cards instead of the colored rings
 
 Pages:
     /               phone AR view (what the QR code opens)
     /board          2D board with the QR code - put it on the laptop screen
     /board?admin=1  same, plus Reset and Done/Failed buttons for the manual worker
-    /markers        printable building marker cards
+    /markers        printable building marker cards (for --track cards)
 """
 
 import argparse
@@ -88,7 +89,7 @@ def announce(url: str, port: int) -> None:
     print(f"\n  Phone link : {url}")
     print(f"  Board (show this on the laptop): http://localhost:{port}/board")
     print(f"  Admin board: http://localhost:{port}/board?admin=1")
-    print(f"  Print marker cards: http://localhost:{port}/markers\n", flush=True)
+    print(f"  Marker cards (--track cards): http://localhost:{port}/markers\n", flush=True)
 
 
 def main():
@@ -103,6 +104,8 @@ def main():
                     help="don't wait for a player to put the generator back before the next delivery")
     ap.add_argument("--mock-time", type=float, nargs=2, default=(4.0, 7.0), metavar=("MIN", "MAX"),
                     help="mock robot delivery time range in seconds")
+    ap.add_argument("--track", choices=["color", "cards"], default="color",
+                    help="how phones find the buildings: the colored rings, or printed marker cards (/markers)")
     ap.add_argument("--no-tunnel", action="store_true")
     args = ap.parse_args()
 
@@ -122,7 +125,7 @@ def main():
         print("Starting Cloudflare tunnel (the QR code appears in a few seconds)...", flush=True)
 
     try:
-        uvicorn.run(create_app(game, public_url), host="0.0.0.0", port=args.port, log_level="warning")
+        uvicorn.run(create_app(game, public_url, args.track), host="0.0.0.0", port=args.port, log_level="warning")
     finally:
         if tunnel:
             tunnel.terminate()

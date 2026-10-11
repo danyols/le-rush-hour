@@ -73,9 +73,11 @@ python -m game --worker manual     # a teammate teleops, then taps "Delivery don
 python -m game --help              # round length, drain speed, choose/random mode, ...
 ```
 
-- `/` - phone AR view (what the QR opens). Detects the printed building cards and draws the buildings on them.
+- `/` - phone AR view (what the QR opens). Finds the red / green / yellow rings by color and draws a building on
+  each one. If the venue lighting throws the colors off, tap **🎯 Tune colors** and tap each ring once
+  (saved per phone).
 - `/board` - 2D board with the QR code; show it on the laptop. `/board?admin=1` adds operator buttons.
-- `/markers` - printable marker cards (print at 100% scale).
+- `/markers` - printable marker cards, a more robust fallback: run with `--track cards` and put a card next to each ring.
 
 The public link comes from a free Cloudflare quick tunnel (`cloudflared`, installed in `~/.local/bin`). Phones need
 https for the camera, so use that link rather than the local IP. The link changes every time the server restarts.

@@ -18,8 +18,11 @@ STATIC = Path(__file__).parent / "static"
 TICK_S = 0.1
 
 
-def create_app(game: Game, public_url: dict) -> FastAPI:
-    """`public_url["url"]` is filled in by the launcher once the tunnel is up."""
+def create_app(game: Game, public_url: dict, track: str = "color") -> FastAPI:
+    """`public_url["url"]` is filled in by the launcher once the tunnel is up.
+
+    `track` tells the phones how to find the buildings: "color" (the colored rings) or "cards" (printed ArUco cards).
+    """
     clients: set[WebSocket] = set()
 
     async def game_loop():
@@ -30,7 +33,9 @@ def create_app(game: Game, public_url: dict) -> FastAPI:
             game.tick(now - last)
             last = now
             if clients:
-                msg = json.dumps({**game.snapshot(), "players": len(clients), "url": public_url.get("url")})
+                msg = json.dumps(
+                    {**game.snapshot(), "players": len(clients), "url": public_url.get("url"), "track": track}
+                )
                 await asyncio.gather(*(ws.send_text(msg) for ws in list(clients)), return_exceptions=True)
 
     @asynccontextmanager
