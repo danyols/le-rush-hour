@@ -60,7 +60,9 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
     clearTimeout(toastTimer);$('toast').hidden=true;updateButtons();
   }
   function recalibrate(){if(!running)return;generation++;showError('');session.begin();clearTimeout(toastTimer);$('toast').hidden=true;}
+  const flash=id=>{const el=$(`target-${id}`);el.classList.remove('chosen');void el.offsetWidth;el.classList.add('chosen');setTimeout(()=>el.classList.remove('chosen'),1100);};
   async function confirm(color){
+    flash(color);
     const current=generation,target=C.targets[color];
     const selection={id:win.crypto.randomUUID(),color,task:target.task,confirmedAt:new Date().toISOString()};
     sending=adapter.robot;syncMode();
@@ -116,6 +118,7 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
   }
   async function stopRobot(){
     if(robot?.state!=='running')return;
+    flash('down');
     robot={...robot,state:'returning'};renderRobot();
     showToast('Sending the arm to rest','The return animation plays once it is back');
     try{robot=await adapter.stop();}catch(error){showError(`Could not stop the robot: ${error.message}`);}
@@ -128,7 +131,11 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
       const el=$(`target-${id}`),active=id===target;
       el.classList.toggle('active',active);
       if(id!=='center')el.classList.toggle('disabled',!session.selector.allowed.has(id));
-      el.style.setProperty('--progress',active?Math.min(1,session.progress):0);
+      const p=active?Math.min(1,session.progress):0;el.style.setProperty('--progress',p);
+      // Dash offsets are set here, not with CSS calc(): Firefox ignores calc() in SVG dash offsets.
+      const ring=el.querySelector('.ring .progress');if(ring)ring.style.strokeDashoffset=String(282.75*(1-p));
+      const border=el.querySelector('.border-ring rect');
+      if(border&&active){const len=border.getTotalLength();border.style.strokeDasharray=`${len} ${len}`;border.style.strokeDashoffset=String(len*(1-p));}
     }
     $('centerProgress').style.width=`${target==='center'?Math.min(100,session.progress*100):0}%`;
     let title='Start camera',count='2s to select';
@@ -150,8 +157,15 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
     text('instructionTitle',title);text('instructionCount',count);
     scene?.preview(phase==='ready'&&!robotBusy()&&session.selector.armed&&C.targets[session.selector.candidate]?session.selector.candidate:null);
     const angles=session.angles;
-    text('centerTitle',phase==='ready'?(session.direction==='center'?'Forward':session.direction?{yellow:'Left',red:'Right',green:'Up',down:'Down'}[session.direction]:'—'):phase==='calibrating'?'Hold still':'—');
-    text('centerHint',angles?`${Math.abs(angles.yaw).toFixed(0)}° ${angles.yaw>=0?'left':'right'} · ${Math.abs(angles.pitch).toFixed(0)}° ${angles.pitch>=0?'up':'down'}`:'');
+    // Live chip: the camera feed plus what the tracker currently recognises.
+    const thumb=$('liveThumb'),feed=running?$('camera').srcObject:null;
+    if(thumb.srcObject!==feed){thumb.srcObject=feed;if(feed)void thumb.play?.().catch(()=>{});}
+    $('target-center').classList.toggle('live',running);text('liveBadge',running?'LIVE':loading?'…':'OFF');
+    const dir=session.direction,looks={yellow:'Looking left',red:'Looking right',green:'Looking up',down:'Looking down'};
+    const dest=dir==='down'?'Arm to rest':C.targets[dir]?`${C.targets[dir].label} tray`:'';
+    const locked=dir&&dir!=='center'&&!session.selector.allowed.has(dir);
+    text('centerTitle',!running?'Camera off':phase==='calibrating'?'Hold still · calibrating':phase!=='ready'?'—':dir==='center'?'Facing forward':dir?`${looks[dir]} → ${dest}`:session.reason==='face'?'No face found':session.reason==='multiple'?'More than one face':'Direction unclear');
+    text('centerHint',!running?'Start the camera to begin':locked?'Locked while the robot is working':angles?`${Math.abs(angles.yaw).toFixed(0)}° ${angles.yaw>=0?'left':'right'} · ${Math.abs(angles.pitch).toFixed(0)}° ${angles.pitch>=0?'up':'down'}`:reasons[session.reason]||'');
     const status=!running?(loading?'Loading tracker…':'Camera off'):reasons[session.reason]||'Head tracked';
     text('trackingStatus',status);$('statusDot').classList.toggle('good',running&&!session.reason);
     text('latency',running?`${Math.round(cost)} ms`:'—');
