@@ -82,3 +82,24 @@ footer{display:flex;justify-content:space-between;color:#6b818a}
 @media(max-width:1050px){.target{min-width:150px}.tray-items{display:none}}
 @media(max-width:760px){.stage{height:560px}.target{min-width:120px;width:34%;padding:10px}.target h2{font-size:17px}.tray-bed{height:34px}.tray-ins{width:38px;height:15px}
   .neutral{top:auto;bottom:16px;left:12px}.target.bottom{left:auto;right:12px;transform:none;min-width:0}.brand-block h1{font-size:20px}}
+
+/* Border ring: the card's outline fills in step with its selection ring. */
+.border-ring{position:absolute;inset:-2px;width:calc(100% + 4px);height:calc(100% + 4px);pointer-events:none;overflow:visible;z-index:2}
+.border-ring rect{x:2px;y:2px;width:calc(100% - 4px);height:calc(100% - 4px);rx:16px;fill:none;stroke:var(--t-color);stroke-width:5;stroke-linecap:round;opacity:0;transition:opacity .15s}
+.target.active .border-ring rect{opacity:1;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--t-color) 55%,transparent))}
+.target.active{transform-origin:center}.target.left.active,.target.right.active{transform:scale(1.03)}
+.target.chosen .border-ring rect{opacity:1;stroke-dasharray:none!important;stroke-dashoffset:0!important;animation:borderFlash 1.1s ease-out}
+@keyframes borderFlash{0%,40%{stroke-width:7}100%{stroke-width:5;opacity:0}}
+.target.chosen{box-shadow:0 0 0 8px color-mix(in srgb,var(--t-color) 22%,transparent),0 12px 26px #10333d1f}
+/* Live chip: camera thumbnail with a blinking LIVE badge and what is being recognised. */
+.neutral{grid-template-columns:auto minmax(150px,auto);padding:8px 14px 8px 8px}
+.live-thumb{grid-row:span 3;position:relative;width:92px;height:62px;border-radius:9px;overflow:hidden;background:#1d2b33}
+.live-thumb video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.live-badge{position:absolute;left:5px;top:5px;display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:5px;background:#0f172acc;color:#cbd5e1;font:800 8.5px Inter,system-ui,sans-serif;letter-spacing:1.2px}
+.live-badge i{width:7px;height:7px;border-radius:50%;background:#94a3b8}
+.neutral.live .live-badge{background:#dc2626;color:#fff}
+.neutral.live .live-badge i{background:#fff;animation:liveBlink 1s steps(1,end) infinite}
+.neutral.live .live-thumb{box-shadow:0 0 0 2px #dc2626,0 0 0 5px #dc262633;animation:liveRing 1.6s ease-in-out infinite}
+@keyframes liveBlink{50%{opacity:.15}}
+@keyframes liveRing{50%{box-shadow:0 0 0 2px #dc2626,0 0 0 7px #dc262614}}
+@media(prefers-reduced-motion:reduce){.neutral.live .live-badge i,.neutral.live .live-thumb{animation:none}}
