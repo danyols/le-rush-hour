@@ -16,12 +16,14 @@ from .engine import Game
 
 STATIC = Path(__file__).parent / "static"
 TICK_S = 0.1
+LOCATIONS = {"red", "green", "yellow", "table"}
 
 
-def create_app(game: Game, public_url: dict, track: str = "color") -> FastAPI:
+def create_app(game: Game, public_url: dict, track: str = "preview") -> FastAPI:
     """`public_url["url"]` is filled in by the launcher once the tunnel is up.
 
-    `track` tells the phones how to find the buildings: "color" (the colored rings) or "cards" (printed ArUco cards).
+    `track` is how phones place the buildings: "preview" (no markers needed, for testing the AR view),
+    "color" (the colored rings) or "cards" (printed ArUco cards). Phones can switch in their settings.
     """
     clients: set[WebSocket] = set()
 
@@ -40,9 +42,11 @@ def create_app(game: Game, public_url: dict, track: str = "color") -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        game.verifier.start()
         task = asyncio.create_task(game_loop())
         yield
         task.cancel()
+        game.verifier.stop()
 
     app = FastAPI(lifespan=lifespan)
 
@@ -65,6 +69,14 @@ def create_app(game: Game, public_url: dict, track: str = "color") -> FastAPI:
         img.save(buf, format="PNG")
         return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "no-store"})
 
+    @app.get("/verify.jpg")
+    async def verify_jpg():
+        """What the verification camera sees, with rings, cube and the detected location drawn on."""
+        jpg = await asyncio.to_thread(game.verifier.debug_jpeg)
+        if jpg is None:
+            return Response(status_code=204)
+        return Response(jpg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
@@ -75,12 +87,13 @@ def create_app(game: Game, public_url: dict, track: str = "color") -> FastAPI:
                 kind = msg.get("type")
                 if kind == "start":
                     game.start()
-                elif kind == "refuel":
-                    game.refuel(msg.get("target"))
+                elif kind == "choose":
+                    game.choose(msg.get("target"))
                 elif kind == "reset":
                     game.reset()
-                elif kind in ("done", "fail"):
-                    game.worker.operator_result(kind == "done")
+                elif kind == "override":  # operator fallback if detection fails mid-demo
+                    loc = msg.get("location")
+                    game.verifier.set_override(loc if loc in LOCATIONS else None)
         except (WebSocketDisconnect, json.JSONDecodeError):
             pass
         finally:
