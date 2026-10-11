@@ -1,112 +1,77 @@
 # le-rush-hour
 
-## Voice-control prototype
+Hands-free instrument hand-off with an SO-101 arm. The operator picks an instrument tray by turning
+their head; the arm runs the trained LeRobot policy for that tray's marker, then returns to rest
+when the operator looks down.
 
-A local, text-first control panel for a voice-directed LeRobot demo. It does **not** move the arm yet: it validates a supported command, shows the proposed action, requires confirmation, records a persistent memory entry, and simulates visual verification.
+```text
+Laptop webcam ─► browser: MediaPipe Face Landmarker → head direction (all on-device)
+                    │  POST /api/robot/run {color}      POST /api/robot/stop
+                    ▼
+game/ server (FastAPI, on the arm PC) ─► robot_models/run_model.py <color>-100k
+                                           start pose → ACT policy on the SO-101
+```
 
-See [`docs/voice-plan.md`](docs/voice-plan.md) for the agreed demo architecture, memory design, and robot-integration sequence.
+| Head | Tray | Marker / model |
+|---|---|---|
+| Left | Clamps | yellow → `robot_models/models/yellow-100k` |
+| Right | Sharps | red → `robot_models/models/red-100k` |
+| Up | Blunt | green → `robot_models/models/green-100k` |
+| Down (only while running) | — | stop: the arm returns to rest |
 
 ## Run it
 
-Use Node 18 or newer:
-
-```powershell
-node server.mjs
-```
-
-Then open `http://localhost:3000`.
-
-## Supported commands
-
-- `Move the block to the green marker`
-- `Put the cube by the green target`
-- `Move the blue block to Zone One`
-- `Place the blue item in the center`
-
-The parser accepts block/cube/item/tool references; destinations are the green marker/target/square or Zone One/Two/Three and left/center/right.
-
-## ElevenLabs voice input and output
-
-The panel has a **Speak command** button. It records while active, sends the audio to ElevenLabs Speech-to-Text, puts the transcript into the command field, and then interprets it locally. The browser asks for microphone permission only after the user presses the button.
-
-The panel always has browser speech synthesis as a no-setup fallback for replies. To use ElevenLabs transcription and text-to-speech, set `ELEVENLABS_API_KEY` before starting the server. The key stays server-side and is never sent to the browser or committed to Git.
-
-```powershell
-$env:ELEVENLABS_API_KEY = "your-key"
-$env:ELEVENLABS_VOICE_ID = "optional-voice-id"
-node server.mjs
-```
-
-If the key is not present, the interface still works and uses the browser voice.
-
-To avoid pasting the key after every terminal restart, copy `.env.example` to `.env`, add the key only to that ignored local file, and start Node with:
-
-```powershell
-& "C:\Users\Dan Pham\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" --env-file=.env server.mjs
-```
-
-The server must stay running while the voice page is open. Stop it with `Ctrl+C` when finished and start it again next time.
-
-Voice commands are intentionally constrained to actions the current robot policies support. Natural language is normalized locally; an LLM is not needed for the initial demo and never controls motor coordinates directly.
-
-## Robot integration contract
-
-Replace the mock action in `public/app.js` with a request to the policy router. The UI emits this command object:
-
-```json
-{
-  "intent": "move",
-  "object": "block",
-  "destination": "green_marker",
-  "policy": "move_block_to_green_marker"
-}
-```
-
-The eventual robot service should return `success`, `message`, and ideally camera-verification metadata.
-
-## Laptop head-control console
+On the arm PC, in the `lerobot` env:
 
 ```bash
-python3 -m game --verify sim --no-tunnel
+cd robot_models && python download_models.py && cd ..   # once: fetch the trained policies
+python -m game                                         # http://localhost:8000/head-control
 ```
 
-Open **http://localhost:8000/head-control** on your laptop. Allow the webcam and
-face forward for about two seconds to capture your neutral position. Turn your
-head **left for yellow**, **right for red**, or **up for green** and hold for two
-seconds to confirm. Face forward briefly before choosing again. Looking down is
-unassigned. All selections remain demo-only; nothing is sent to the robot.
-The previous `/eye-control` link opens the same head-control interface.
-
-[Head-control setup, sensitivity and robot adapter](docs/eye-control.md)
-
-## Rush Hour game (phone AR + game server)
+The browser needs a secure origin for the webcam, so open the page as `localhost`. From a laptop,
+tunnel the port and use the laptop's webcam:
 
 ```bash
-conda activate lerobot
-python -m game                     # real game: the side camera confirms where the cube is; prints a QR code
-python -m game --verify sim        # no hardware: simulated robot and camera, for UI work
-python -m game --track color       # phones place buildings on the colored rings (default: preview)
-python -m game --help              # round length, drain/charge speed, choose/random mode, ...
+ssh -L 8000:localhost:8000 <arm-pc> 'cd le-rush-hour && conda run -n lerobot python -m game'
+# then open http://localhost:8000/head-control on the laptop
 ```
 
-**Buildings only charge while the cube is next to their ring.** The server watches the table through the
-robot's side camera (`--verify-camera 2`) and finds the rings and the white cube (`game/vision.py`). A delivery
-counts once the cube has stayed beside the target ring for about 1.5 s, so the arm carrying it past a ring
-doesn't count. After a building is full, a player puts the cube back on the table (also detected) and the robot
-is sent to the next building. Nothing ever recharges on a timer.
+Options: `--port 8080`; `--robot-python /path/to/python` (a Python with LeRobot; defaults to the one
+running the server). `--robot-python /bin/false` tests head tracking without moving the arm.
 
-- `/` - phone AR view (what the QR opens). 3D buildings whose floors light up with their energy and go dark as it
-  drains. Settings (top right) switch placement between **Preview** (buildings appear without markers, for
-  testing), **Rings** (on the colored rings, with ring color calibration) and **Cards** (printed markers). On a
-  phone, the motion sensor keeps buildings upright.
-- `/board` - 2D board with the QR code; show it on the laptop.
-- `/board?admin=1` - adds the verification camera view (what the server sees), a manual generator-location
-  override for demo emergencies, and reset.
-- `/markers` - printable marker cards for the Cards mode.
+## Using head control
 
-The public link comes from a free Cloudflare quick tunnel (`cloudflared`, installed in `~/.local/bin`). Phones need
-https for the camera and motion sensor, so use that link rather than the local IP. The link changes every time
-the server restarts.
+1. Start the camera and face forward for about 1.5 s to capture your neutral pose.
+2. Face forward another 0.5 s, then turn **left**, **right** or **up** and hold for 2 s until the ring
+   fills. The arm moves to that color's start pose and runs its policy.
+3. Tracking continues during the run, but only **DOWN** is accepted. Once the instrument is
+   delivered, look down and hold for 2 s: the run stops and the arm returns to rest.
+4. When the page shows *At rest*, face forward and pick the next tray.
 
-The side camera can only be opened by one program at a time. While a trained policy runs in a separate terminal,
-the game can't use that camera; the policy worker will share its frames once it is added.
+Only one run at a time; repeated or overlapping selections are rejected by the server. No camera
+frames leave the browser. Thresholds, timing and the tray mapping are in
+`game/static/eye/config.js`; details in [docs/eye-control.md](docs/eye-control.md).
+
+## Robot models
+
+From `robot_models/`, in the `lerobot` env:
+
+```bash
+python download_models.py              # fetch the policies from the Hugging Face Hub into models/
+python start_pose.py teach green       # torque off, move the arm by hand, ENTER saves the start pose
+python start_pose.py go green          # drive to the saved green start pose
+python run_model.py green-100k         # start pose, then the policy (30 s; --duration 0 = until Ctrl+C)
+```
+
+`record.py` (repo root) records new training episodes with the leader/follower arms and pushes the
+dataset to the Hub; arm, camera and calibration ids match `run_model.py`.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `game/server.py` | FastAPI app: `/head-control` page and `/api/robot` run/stop/status |
+| `game/robot.py` | Launches `run_model.py` for a color, one run at a time; stop = one SIGINT |
+| `game/static/eye/` | Head-tracking UI: camera, MediaPipe worker, pose classifier, dwell, OR scene |
+| `robot_models/` | Model download, start poses and the policy runner |
+| `tests/` | `node tests/head-control.test.mjs` and `node tests/eye-camera.test.mjs` |

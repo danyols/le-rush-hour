@@ -5,7 +5,8 @@ The old `/eye-control` URL remains an alias; both serve the replacement interfac
 The internal `game/static/eye/` folder name is retained for asset-path compatibility.
 
 ```bash
-python3 -m game --verify sim --no-tunnel
+conda activate lerobot
+python -m game
 ```
 
 ## Use
@@ -18,7 +19,7 @@ python3 -m game --verify sim --no-tunnel
 4. Turn your head **left → yellow**, **right → red**, or **tilt up → green**.
    Hold for two seconds. The progress ring fills and a popup confirms your choice.
 5. Face forward for 500 ms before the next choice. Continuing to hold a turn never
-   repeats a selection. Looking down has no command and does not rearm selection.
+   repeats a selection. Looking down has no command until the robot is running (see Robot connection).
 
 Use modest turns; you should still see the screen. The directions are your own
 left and right, matching the mirrored preview. Eye movements are not used. Normal
@@ -69,35 +70,49 @@ Missing faces, multiple faces, or invalid poses reset pending progress. The UI's
 processing-time number is worker duration, not end-to-end latency. No frames,
 calibration data, or selection history are uploaded or persisted.
 
-## Future robot connection
+## OR theme
 
-| Head direction | Color | Task |
+The page is themed as a sterile instrument return in an operating room. The three marker colors are
+instrument trays around a clipart SO-101 arm (`game/static/eye/or-scene.js`); categories and the
+instruments drawn in each tray live in `config.js`:
+
+| Head direction | Tray | Instruments |
 |---|---|---|
-| Left | Yellow | white_cube-yellow_marker |
-| Right | Red | white_cube-red_marker |
-| Up | Green | white_cube-green_marker |
+| Right | Sharps (red) | Scalpel, suture needle, scissors |
+| Left | Clamps & forceps (yellow) | Forceps, hemostat, needle holder |
+| Up | Blunt & retractors (green) | Retractor, probe, elevator |
 
-The unchanged adapter contract is:
+The scene mirrors the real arm: while the robot runs, a gloved hand holds the instrument at the
+surgeon hand-off point and a dashed route points to the chosen tray. Once DOWN has been given and
+the arm is back at rest, the scene plays the return: the arm picks the instrument out of the hand,
+carries it to the tray and drops it in; the tray pulses and its "returned" count goes up. The
+animation is visual only - it never moves the robot.
 
-```js
-await adapter.submitSelection({
-  id: crypto.randomUUID(),
-  color: 'green',
-  task: 'white_cube-green_marker',
-  confirmedAt: new Date().toISOString(),
-});
-```
+## Robot connection
 
-`DemoAdapter` deduplicates IDs, keeps five recent choices and returns
-`{id, status: 'not sent'}`. There is no robot endpoint, game websocket, model
-execution or worker invocation in this page. Inject a replacement adapter into
-`mountHeadControl` when a backend is ready. Keep actual model paths server-side.
+| Head direction | Color | Model run |
+|---|---|---|
+| Left | Yellow | `robot_models/models/yellow-100k` (else `yellow`) |
+| Right | Red | `robot_models/models/red-100k` (else `red`) |
+| Up | Green | `robot_models/models/green-100k` (else `green`) |
 
-The future backend should validate the color/task mapping, deduplicate IDs, resolve
-model paths through workstation configuration and invoke a server-side policy worker (`PolicyWorker` when integrated)
-with a LeRobot runner. Permit only one hardware job at a time and report busy or
-error status without automatically repeating a physical motion. Real acknowledgement
-and job status should replace the demo UI's fixed “not sent” status.
+Run the server from the `lerobot` env (`conda activate lerobot; python -m game`) or pass
+`--robot-python` pointing at a Python that has LeRobot. A confirmed selection:
+
+1. `POST /api/robot/run {id, color}` - `game/robot.py` launches
+   `robot_models/run_model.py <model> --duration 0`; the arm moves to that color's
+   start pose (`start_pose.py`) and the policy runs until stopped,
+2. The camera stays on, but while the robot runs the only command is **DOWN**: look down and hold
+   until the Rest ring fills (two seconds). That sends `POST /api/robot/stop`: one SIGINT, which
+   LeRobot handles like Ctrl+C - it stops the policy, moves the arm back to where the run started
+   and disconnects. Left, right and up are locked out mid-run, so no other marker can be picked.
+3. Once the arm is back at rest, left/right/up work again and DOWN does nothing.
+
+Every mode change needs a fresh forward hold (0.5 s) before a selection counts. The page's
+camera must not be one of the robot's cameras (`/dev/video0`, `/dev/video2` on the arm PC): it now
+stays open during the run.
+
+Only one run at a time (a second selection gets 409) and selection ids are deduplicated. `GET /api/robot` returns the run state.
 
 ## Checks
 

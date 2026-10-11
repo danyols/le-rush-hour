@@ -1,16 +1,17 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Look · Robot head control</title><link rel="stylesheet" href="/static/eye/style.css"></head>
+<title>Sterile Instrument Return</title><link rel="stylesheet" href="/static/eye/style.css"></head>
 <body>
 <div class="app">
-<header class="topbar"><h1>Head control</h1><span class="demo"><i></i>Demo · not sent</span></header>
+<header class="topbar"><div class="brand-block"><span class="cross" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 2.5h6v6.5h6.5v6H15v6.5H9V15H2.5V9H9z"/></svg></span><div><h1>Sterile Instrument Return</h1><p class="tagline">Hands-free OR hand-off · SO-101 robotic arm</p></div></div><span class="demo"><i></i>Robot connected</span></header>
 <main>
-<section class="workspace" aria-label="Head direction selection area">
+<section class="workspace" aria-label="Operating room: instrument trays around the robot arm">
 <div class="stage" id="stage">
-<div class="target top" id="target-green" data-color="green"><div class="target-topline"><span class="direction">↑ TOP</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2>Green</h2></div></div></div>
-<div class="target left" id="target-yellow" data-color="yellow"><div class="target-topline"><span class="direction">← LEFT</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2>Yellow</h2></div></div></div>
+<div class="target tray top" id="target-green" data-color="green"><div class="target-topline"><span class="direction">↑ LOOK UP</span><span class="tray-count">0 returned</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2></h2><p class="tray-items"></p></div></div><div class="tray-bed"></div></div>
+<div class="target tray left" id="target-yellow" data-color="yellow"><div class="target-topline"><span class="direction">← LOOK LEFT</span><span class="tray-count">0 returned</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2></h2><p class="tray-items"></p></div></div><div class="tray-bed"></div></div>
+<div class="target tray right" id="target-red" data-color="red"><div class="target-topline"><span class="direction">LOOK RIGHT →</span><span class="tray-count">0 returned</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2></h2><p class="tray-items"></p></div></div><div class="tray-bed"></div></div>
 <div class="neutral" id="target-center"><div class="center-mark"><span></span><span></span><i></i></div><strong id="centerTitle">Face forward to begin</strong><span id="centerHint">Start your camera first</span><div class="center-progress"><i id="centerProgress"></i></div></div>
-<div class="target right" id="target-red" data-color="red"><div class="target-topline"><span class="direction">RIGHT →</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2>Red</h2></div></div></div>
+<div class="target bottom" id="target-down" data-color="down"><div class="target-topline"><span class="direction">↓ LOOK DOWN</span></div><div class="target-content"><span class="color-orb"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="progress" cx="50" cy="50" r="45"/></svg><span class="orb-core"></span></span><div><h2>Arm to rest</h2><p class="tray-items">Once the instrument is in its tray</p></div></div></div>
 </div>
 <div class="instruction" aria-live="polite"><strong id="instructionTitle">Start camera</strong><span class="instruction-count" id="instructionCount">2s to select</span></div>
 </section>
@@ -19,13 +20,13 @@
 <label class="camera-label" for="cameraDevice">Camera source</label><select id="cameraDevice"><option value="">Default laptop camera</option></select>
 <button class="primary" id="start">Start camera <span>↗</span></button><div class="secondary-controls"><button id="pause" disabled>Pause</button><button id="recalibrate" disabled>Recalibrate</button></div>
 <p id="error" class="error" role="alert" hidden></p></section>
-<section class="selection-card" aria-live="polite"><div class="panel-heading"><h3>Result</h3><span class="small-tag">DEMO</span></div><div id="lastSelection" class="last-selection"><span class="selection-empty">—</span><div><strong>No selection yet</strong></div></div><div class="command-status"><span>Robot command</span><strong>Not sent</strong></div></section>
+<section class="selection-card" aria-live="polite"><div class="panel-heading"><h3>Instrument run</h3></div><div id="lastSelection" class="last-selection"><span class="selection-empty">—</span><div><strong>No selection yet</strong></div></div><div class="command-status"><span>Arm</span><strong id="robotState">Connecting…</strong></div><p id="robotMessage" class="robot-message"></p></section>
 <details class="history-card"><summary>Recent selections</summary><div><div class="panel-heading"><h3>Recent choices</h3><span id="historyCount">0</span></div><ol id="history"><li class="empty-history">No selections yet.</li></ol></div></details>
 </aside>
 </main>
-<footer><span>Camera processed locally</span><a href="/">Back to Rush Hour ↗</a></footer>
+<footer><span>Camera processed locally · no images leave this computer</span><span>Look at a tray to choose · look down to send the arm to rest</span></footer>
 </div>
-<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastDot">✓</span><div><strong id="toastTitle"></strong><p>Demo command ready · not sent</p></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastDot">✓</span><div><strong id="toastTitle"></strong><p id="toastDetail"></p></div></div>
 <script>window.addEventListener('error',e=>{const box=document.getElementById('error');box.hidden=false;box.textContent='The console could not run: '+(e.message||'a required file did not load')+'. Reload and try again.';});</script>
 <script type="module" src="/static/eye/app.js"></script>
 </body></html>
