@@ -1,8 +1,9 @@
 export const HEAD_CONFIG = Object.freeze({
   targets: {
-    green: {label:'Green',position:'top',color:'#268269',task:'white_cube-green_marker'},
-    yellow: {label:'Yellow',position:'left',color:'#b58418',task:'white_cube-yellow_marker'},
-    red: {label:'Red',position:'right',color:'#c56059',task:'white_cube-red_marker'},
+    // Each marker color is an instrument tray. `items` are drawn by or-scene.js (INSTRUMENTS).
+    green: {label:'Blunt',category:'Blunt & retractors',position:'top',color:'#0f9d77',task:'white_cube-green_marker',items:['retractor','probe','elevator']},
+    yellow: {label:'Clamps',category:'Clamps & forceps',position:'left',color:'#d4930d',task:'white_cube-yellow_marker',items:['forceps','hemostat','needleHolder']},
+    red: {label:'Sharps',category:'Sharps',position:'right',color:'#d64545',task:'white_cube-red_marker',items:['scalpel','needle','scissors']},
   },
   dwellMs:2000, rearmMs:500, freshnessMs:250,
   settleMs:500, sampleMs:1000, frameIntervalMs:60,

@@ -1,6 +1,6 @@
 import {HEAD_CONFIG as C} from './config.js';
 export class DwellSelector {
-  constructor(){this.reset();}
+  constructor(){this.allowed=new Set(Object.keys(C.targets));this.reset();}
   reset(){this.armed=false;this.candidate=null;this.elapsed=0;this.centerMs=0;this.lastTime=null;this.lastDirection=null;}
   clearProgress(){this.candidate=null;this.elapsed=0;this.centerMs=0;this.lastDirection=null;}
   expire(now){if(this.lastTime!==null&&now-this.lastTime>C.freshnessMs)this.clearProgress();}
@@ -16,7 +16,7 @@ export class DwellSelector {
       if(this.centerMs>=C.rearmMs){this.armed=true;this.centerMs=0;}
       this.lastDirection=direction;return null;
     }
-    if(!C.targets[direction]){this.clearProgress();this.lastDirection=direction;return null;}
+    if(!this.allowed.has(direction)){this.clearProgress();this.lastDirection=direction;return null;}
     if(this.candidate!==direction){this.candidate=direction;this.elapsed=0;}
     else if(this.lastDirection===direction)this.elapsed+=dt;
     this.lastDirection=direction;

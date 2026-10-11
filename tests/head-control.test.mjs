@@ -46,6 +46,17 @@ feed(neutral,800);feed(pose(-16),800);s.tick(time+300);assert.equal(s.selector.e
 time+=400;s.observe({valid:false,reason:'face'},time,time);assert.equal(s.direction,null);
 feed(neutral,800);feed(pose(16),600);s.observe({valid:false,reason:'multiple'},time+=60,time);assert.equal(s.selector.elapsed,0);
 s.pause();assert.equal(feed(pose(16),3000),null);s.begin();assert.equal(s.model,null);
+// While the robot runs only DOWN is a command (it sends the arm to rest); colors are locked out.
+assert.equal(classifyHead(relativeAngles(pose(0,-15),neutral),null,{down:true}),'down');
+assert.equal(classifyHead(relativeAngles(pose(20,-15),neutral),null,{down:true}),null,'diagonal down is ambiguous');
+s.begin();feed(neutral,1620);feed(neutral,800);s.setAllowed(['down']);
+assert.equal(feed(pose(0,-15),2300),null,'a mode change needs a fresh forward hold');
+feed(neutral,800);assert.equal(feed(pose(16),3000),null,'colors are locked while the robot runs');assert.equal(s.reason,'locked');
+feed(neutral,800);assert.equal(feed(pose(0,14),3000),null);
+feed(neutral,800);assert.equal(feed(pose(0,-15),1500),null);assert.equal(feed(pose(0,-15),800),'down','down selects after the dwell');
+assert.equal(feed(pose(0,-15),3000),null,'holding down cannot repeat');
+s.setAllowed([]);feed(neutral,800);assert.equal(feed(pose(0,-15),3000),null,'nothing selects while the arm returns');
+s.setAllowed(Object.keys(C.targets));feed(neutral,800);assert.equal(feed(pose(-16),2300),'red','colors return once at rest');
 const d=new DwellSelector();for(let t=0;t<=600;t+=50)d.observe('center',t);for(let t=650;t<=1500;t+=50)d.observe('red',t);d.observe('red',1550,1900);assert.equal(d.elapsed,0);d.observe('yellow',1500,1900);assert.equal(d.lastTime,1550);
 const adapter=new DemoAdapter();const cmd={id:'one',color:'green',task:C.targets.green.task,confirmedAt:new Date().toISOString()};assert.equal((await adapter.submitSelection(cmd)).status,'not sent');await adapter.submitSelection(cmd);assert.equal(adapter.history.length,1);
-console.log('PASS: matrix layout/scale, user-left/right/up mapping, eye-independent extraction, neutral setup stability, head thresholds/hysteresis, downward rejection, dwell, rearm, staleness and demo-only adapter.');
+console.log('PASS: matrix layout/scale, user-left/right/up mapping, eye-independent extraction, neutral setup stability, head thresholds/hysteresis, downward rejection, dwell, rearm, staleness, DOWN-only robot mode and demo-only adapter.');
