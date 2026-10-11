@@ -17,21 +17,32 @@ let recorder = null;
 let audioChunks = [];
 
 const destinations = [
-  { id: "green_marker", names: ["green marker", "green target", "green square", "green zone"] },
-  { id: "zone_1", names: ["zone one", "zone 1", "left bin", "left"] },
-  { id: "zone_2", names: ["zone two", "zone 2", "center bin", "centre bin", "center", "centre"] },
-  { id: "zone_3", names: ["zone three", "zone 3", "right bin", "right"] },
+  {
+    id: "red_marker",
+    color: "red",
+    names: ["red marker", "red target", "red square", "red zone", "red building", "red tower", "red fire station"],
+  },
+  {
+    id: "yellow_marker",
+    color: "yellow",
+    names: ["yellow marker", "yellow target", "yellow square", "yellow zone", "yellow building", "yellow tower", "yellow shelter"],
+  },
+  {
+    id: "green_marker",
+    color: "green",
+    names: ["green marker", "green target", "green square", "green zone", "green building", "green tower", "green hospital"],
+  },
 ];
 
 function titleCaseZone(destination) {
-  if (destination === "green_marker") return "the green marker";
-  return destination.replace("zone_", "Zone ");
+  const target = destinations.find(({ id }) => id === destination);
+  return target ? `the ${target.color} marker` : destination;
 }
 
 function parseCommand(raw) {
   const input = raw.toLowerCase().replace(/[.!?,]/g, " ").replace(/\s+/g, " ").trim();
   const hasMoveVerb = /\b(move|put|place|send)\b/.test(input);
-  const objectMatch = input.match(/\b(blue\s+)?(block|cube|item|tool)\b/);
+  const objectMatch = input.match(/\b(blue\s+)?(block|cube|item|tool|pod|package|it)\b/);
   const destination = destinations.find(({ names }) => names.some((name) => input.includes(name)));
 
   if (!hasMoveVerb || !objectMatch || !destination) {
@@ -44,9 +55,7 @@ function parseCommand(raw) {
     intent: "move",
     object,
     destination: destination.id,
-    policy: destination.id === "green_marker"
-      ? "move_block_to_green_marker"
-      : `pick_${object}_to_${destination.id}`,
+    policy: `move_block_to_${destination.id}`,
   };
 }
 
@@ -152,11 +161,11 @@ function interpret() {
 
   if (!proposedAction) {
     commandJson.textContent = "No supported command interpreted.";
-    confirmation.textContent = "Use a move verb, ‘blue block,’ and Zone One/Two/Three (or left/center/right).";
+    confirmation.textContent = "Use a move verb, an object, and a red, yellow, or green destination.";
     confirmButton.disabled = true;
     cancelButton.disabled = true;
     updateStatus("Needs clarification", "warning");
-    error.textContent = "Example: Move the blue block to Zone One.";
+    error.textContent = "Example: Move the block to the yellow building.";
     return;
   }
 
@@ -166,6 +175,20 @@ function interpret() {
   cancelButton.disabled = false;
   updateStatus("Awaiting confirmation", "waiting");
   speak(confirmation.textContent);
+}
+
+function selectGameTarget(color) {
+  const normalizedColor = String(color ?? "").trim().toLowerCase();
+  const destination = destinations.find(({ color: destinationColor }) => destinationColor === normalizedColor);
+
+  if (!destination) {
+    error.textContent = "The game must choose red, yellow, or green.";
+    return;
+  }
+
+  commandInput.value = `Move the block to the ${destination.color} building.`;
+  recordingStatus.textContent = `AR game selected: ${destination.color}.`;
+  interpret();
 }
 
 async function runMockAction() {
@@ -203,6 +226,16 @@ cancelButton.addEventListener("click", () => {
 clearMemoryButton.addEventListener("click", () => {
   localStorage.removeItem(memoryKey);
   renderMemory();
+});
+
+// AR integration contract: window.leRushHour.selectTarget("yellow")
+// A separate AR page can also post: { type: "le-rush-hour-target", color: "yellow" }.
+// This only proposes the task; a person still confirms before any future robot call.
+window.leRushHour = { selectTarget: selectGameTarget };
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "le-rush-hour-target") {
+    selectGameTarget(event.data.color);
+  }
 });
 
 renderMemory();
