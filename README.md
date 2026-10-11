@@ -68,16 +68,30 @@ The eventual robot service should return `success`, `message`, and ideally camer
 
 ```bash
 conda activate lerobot
-python -m game                     # mock robot, prints a QR code + public https link
-python -m game --worker manual     # a teammate teleops, then taps "Delivery done" on /board?admin=1
-python -m game --help              # round length, drain speed, choose/random mode, ...
+python -m game                     # real game: the side camera confirms where the cube is; prints a QR code
+python -m game --verify sim        # no hardware: simulated robot and camera, for UI work
+python -m game --track color       # phones place buildings on the colored rings (default: preview)
+python -m game --help              # round length, drain/charge speed, choose/random mode, ...
 ```
 
-- `/` - phone AR view (what the QR opens). Finds the red / green / yellow rings by color and draws a building on
-  each one. If the venue lighting throws the colors off, tap **🎯 Tune colors** and tap each ring once
-  (saved per phone).
-- `/board` - 2D board with the QR code; show it on the laptop. `/board?admin=1` adds operator buttons.
-- `/markers` - printable marker cards, a more robust fallback: run with `--track cards` and put a card next to each ring.
+**Buildings only charge while the cube is next to their ring.** The server watches the table through the
+robot's side camera (`--verify-camera 2`) and finds the rings and the white cube (`game/vision.py`). A delivery
+counts once the cube has stayed beside the target ring for about 1.5 s, so the arm carrying it past a ring
+doesn't count. After a building is full, a player puts the cube back on the table (also detected) and the robot
+is sent to the next building. Nothing ever recharges on a timer.
+
+- `/` - phone AR view (what the QR opens). 3D buildings whose floors light up with their energy and go dark as it
+  drains. Settings (top right) switch placement between **Preview** (buildings appear without markers, for
+  testing), **Rings** (on the colored rings, with ring color calibration) and **Cards** (printed markers). On a
+  phone, the motion sensor keeps buildings upright.
+- `/board` - 2D board with the QR code; show it on the laptop.
+- `/board?admin=1` - adds the verification camera view (what the server sees), a manual generator-location
+  override for demo emergencies, and reset.
+- `/markers` - printable marker cards for the Cards mode.
 
 The public link comes from a free Cloudflare quick tunnel (`cloudflared`, installed in `~/.local/bin`). Phones need
-https for the camera, so use that link rather than the local IP. The link changes every time the server restarts.
+https for the camera and motion sensor, so use that link rather than the local IP. The link changes every time
+the server restarts.
+
+The side camera can only be opened by one program at a time. While a trained policy runs in a separate terminal,
+the game can't use that camera; the policy worker will share its frames once it is added.

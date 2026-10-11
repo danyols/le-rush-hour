@@ -1,14 +1,16 @@
 """Run the Rush Hour game server.
 
-    python -m game                      # mock robot + public HTTPS link and QR code
-    python -m game --worker manual      # operator taps Done on /board?admin=1 (teleop / fallback)
+    python -m game                      # camera-verified game, a person moves the cube; https link + QR code
+    python -m game --verify sim         # no hardware: simulated robot and camera, for UI work
+    python -m game --track color        # phones place buildings on the colored rings (default: preview)
     python -m game --no-tunnel          # local only (phones can't use the camera over plain http)
-    python -m game --track cards        # find buildings by printed marker cards instead of the colored rings
+
+Buildings only charge while the verification camera sees the cube next to their ring.
 
 Pages:
     /               phone AR view (what the QR code opens)
     /board          2D board with the QR code - put it on the laptop screen
-    /board?admin=1  same, plus Reset and Done/Failed buttons for the manual worker
+    /board?admin=1  same, plus the verification camera view, overrides and reset
     /markers        printable building marker cards (for --track cards)
 """
 
@@ -28,7 +30,8 @@ import uvicorn
 
 from .engine import Game
 from .server import create_app
-from .workers import make_worker
+from .verify import CameraVerifier, SimVerifier
+from .workers import HandWorker, SimWorker
 
 TUNNEL_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
@@ -94,24 +97,36 @@ def announce(url: str, port: int) -> None:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--worker", choices=["mock", "manual"], default="mock")
+    ap.add_argument("--verify", choices=["camera", "sim"], default="camera",
+                    help="camera: watch the table to see where the cube is; sim: simulate robot + camera (UI work)")
+    ap.add_argument("--verify-camera", type=int, default=2, help="camera index that sees the whole table")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--drain", type=float, default=90.0, help="seconds for a full building to drain to 0")
-    ap.add_argument("--round", type=float, default=180.0, help="round length in seconds")
+    ap.add_argument("--drain", type=float, default=150.0, help="seconds for a full building to drain to 0")
+    ap.add_argument("--charge", type=float, default=8.0, help="seconds to charge an empty building while the cube is there")
+    ap.add_argument("--round", type=float, default=240.0, help="round length in seconds")
     ap.add_argument("--mode", choices=["random", "choose"], default="random",
                     help="random: server picks the next building; choose: players pick it when refueling")
     ap.add_argument("--no-refuel", action="store_true",
-                    help="don't wait for a player to put the generator back before the next delivery")
-    ap.add_argument("--mock-time", type=float, nargs=2, default=(4.0, 7.0), metavar=("MIN", "MAX"),
-                    help="mock robot delivery time range in seconds")
-    ap.add_argument("--track", choices=["color", "cards"], default="color",
-                    help="how phones find the buildings: the colored rings, or printed marker cards (/markers)")
+                    help="send the robot straight to the next building instead of waiting for the cube on the table")
+    ap.add_argument("--sim-time", type=float, nargs=2, default=(4.0, 7.0), metavar=("MIN", "MAX"),
+                    help="simulated robot delivery time range in seconds (--verify sim)")
+    ap.add_argument("--track", choices=["preview", "color", "cards"], default="preview",
+                    help="how phones place buildings: preview (no markers, for testing), the colored rings, "
+                         "or printed marker cards (/markers)")
     ap.add_argument("--no-tunnel", action="store_true")
     args = ap.parse_args()
 
+    if args.verify == "sim":
+        verifier = SimVerifier()
+        worker = SimWorker(verifier, *args.sim_time)
+    else:
+        verifier = CameraVerifier(args.verify_camera)
+        worker = HandWorker()  # the policy worker plugs in here once the models are trained
     game = Game(
-        make_worker(args.worker, tuple(args.mock_time)),
+        worker,
+        verifier,
         drain_s=args.drain,
+        charge_s=args.charge,
         round_s=args.round,
         refuel=not args.no_refuel,
         mode=args.mode,
