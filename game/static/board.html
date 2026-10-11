@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rush Hour Board</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { padding: 16px; }
+    .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+    header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+    h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
+    h1 small { color: var(--muted); font-weight: 500; font-size: 0.9rem; margin-left: 0.4rem; }
+    .main { display: grid; grid-template-columns: 1fr 260px; gap: 16px; }
+    @media (max-width: 760px) { .main { grid-template-columns: 1fr; } .qr { order: -1; } }
+
+    .city { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 520px) { .city { grid-template-columns: 1fr; } }
+    .bld {
+      --c: #888;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      padding: 14px; display: grid; gap: 10px; position: relative; overflow: hidden;
+      transition: box-shadow 0.3s, border-color 0.3s;
+    }
+    .bld.target { border-color: var(--c); box-shadow: 0 0 0 2px var(--c), 0 0 32px color-mix(in srgb, var(--c) 40%, transparent); animation: pulse 1s ease-in-out infinite alternate; }
+    .bld.flash { box-shadow: 0 0 60px var(--c); }
+    @keyframes pulse { to { box-shadow: 0 0 0 2px var(--c), 0 0 12px transparent; } }
+    .bld .name { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+    .bld .tag { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--c); color: #0b0e17; visibility: hidden; }
+    .bld.target .tag, .bld.has-gen .tag { visibility: visible; }
+    .tower { height: 140px; display: flex; align-items: flex-end; justify-content: center; }
+    .tower svg { height: 100%; }
+    .bar { height: 12px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--c); border-radius: 99px; transition: width 0.15s linear; }
+    .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
+    .bld.low .pct { color: var(--danger); }
+    .bld.dark { filter: saturate(0.2); }
+    .bld.dark .pct { color: var(--danger); font-weight: 700; }
+
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+    .qr { text-align: center; display: grid; gap: 8px; align-content: start; }
+    .qr img { width: 100%; max-width: 220px; margin: 0 auto; border-radius: 10px; background: #fff; padding: 6px; }
+    .qr .url { font-size: 0.75rem; color: var(--muted); word-break: break-all; }
+    .controls { display: grid; gap: 12px; text-align: center; }
+    .admin { border-style: dashed; display: none; }
+    .admin.on { display: grid; gap: 10px; }
+    .admin h2 { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>⚡ Rush Hour <small>keep the city powered</small></h1>
+    <div class="stats">
+      <div class="stat"><b id="time">-:--</b><span>time left</span></div>
+      <div class="stat"><b id="uptime">100%</b><span>uptime</span></div>
+      <div class="stat"><b id="charges">0</b><span>deliveries</span></div>
+      <div class="stat"><b id="players">0</b><span>players</span></div>
+    </div>
+  </header>
+
+  <div class="main">
+    <div style="display:grid; gap:16px; align-content:start">
+      <div class="city" id="city"></div>
+      <div class="panel controls">
+        <div class="event" id="event">Connecting…</div>
+        <div class="actions" id="actions"></div>
+      </div>
+      <div class="panel admin" id="admin">
+        <h2>Operator</h2>
+        <div class="actions">
+          <button class="btn small" id="done">✅ Delivery done</button>
+          <button class="btn small" id="fail">❌ Delivery failed</button>
+          <button class="btn small" id="reset">↺ Reset game</button>
+        </div>
+        <div class="event" id="worker"></div>
+      </div>
+    </div>
+    <div class="panel qr">
+      <strong>Scan to play in AR</strong>
+      <img id="qr" alt="QR code for the phone game">
+      <div class="url" id="url"></div>
+      <a href="/markers">Print marker cards</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/game.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const admin = new URLSearchParams(location.search).has("admin");
+  $("admin").classList.toggle("on", admin);
+  $("done").onclick = () => RushHour.send("done");
+  $("fail").onclick = () => RushHour.send("fail");
+  $("reset").onclick = () => RushHour.send("reset");
+
+  // Simple skyscraper whose windows light up with the energy level.
+  function towerSvg(color, energy, seed) {
+    const cols = 4, rows = 7, lit = Math.round((energy / 100) * cols * rows);
+    let windows = "";
+    const order = [...Array(cols * rows).keys()].sort((a, b) => ((a * 7919 + seed) % 31) - ((b * 7919 + seed) % 31));
+    const litSet = new Set(order.slice(0, lit));
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        const on = litSet.has(r * cols + c);
+        windows += `<rect x="${12 + c * 18}" y="${20 + r * 22}" width="10" height="13" rx="2" fill="${on ? color : "#2a3247"}" opacity="${on ? 1 : 0.8}"/>`;
+      }
+    return `<svg viewBox="0 0 96 180"><rect x="4" y="8" width="88" height="172" rx="6" fill="#1d2436" stroke="${energy > 0 ? color : "#444"}" stroke-width="2"/>${windows}</svg>`;
+  }
+
+  const cards = {};
+  function ensureCards(s) {
+    if (Object.keys(cards).length) return;
+    s.buildings.forEach((b, i) => {
+      const el = document.createElement("div");
+      el.className = "bld";
+      el.style.setProperty("--c", b.color);
+      el.innerHTML = `<div class="name"><span>${b.name}</span><span class="tag"></span></div>
+        <div class="tower"></div><div class="bar"><i></i></div><div class="pct"></div>`;
+      $("city").appendChild(el);
+      cards[b.id] = { el, seed: i * 13 + 5, lastLit: -1 };
+    });
+  }
+
+  RushHour.onState((s) => {
+    RushHour.renderActions($("actions"), s);
+    if (!s) { $("event").textContent = "Disconnected - reconnecting…"; $("event").classList.add("offline"); return; }
+    $("event").classList.remove("offline");
+    ensureCards(s);
+    $("time").textContent = RushHour.fmtTime(s.time_left);
+    $("uptime").textContent = `${Math.round(s.uptime * 100)}%`;
+    $("charges").textContent = s.charges;
+    $("players").textContent = s.players;
+    $("event").textContent = s.event;
+    $("worker").textContent = `Robot worker: ${s.worker}` + (s.worker === "manual" && s.phase === "dispatch" && s.target
+      ? ` - move the generator to ${RushHour.byId(s, s.target).name}, then tap Done` : "");
+    if (s.url && $("url").textContent !== s.url) {
+      $("url").textContent = s.url;
+      $("qr").src = `/qr.png?u=${encodeURIComponent(s.url)}`;
+    }
+    for (const b of s.buildings) {
+      const c = cards[b.id], el = c.el;
+      const isTarget = s.phase === "dispatch" && s.target === b.id;
+      el.classList.toggle("target", isTarget);
+      el.classList.toggle("has-gen", s.generator_at === b.id && !isTarget);
+      el.classList.toggle("flash", b.just_charged);
+      el.classList.toggle("low", b.energy > 0 && b.energy < 25);
+      el.classList.toggle("dark", b.energy <= 0);
+      el.querySelector(".tag").textContent = isTarget ? "⚡ incoming" : "generator here";
+      el.querySelector(".bar i").style.width = `${b.energy}%`;
+      el.querySelector(".pct").textContent = b.energy <= 0 ? "BLACKOUT" : `${Math.round(b.energy)}% power`;
+      const lit = Math.round(b.energy / 100 * 28);
+      if (lit !== c.lastLit) { c.lastLit = lit; el.querySelector(".tower").innerHTML = towerSvg(b.color, b.energy, c.seed); }
+    }
+  });
+</script>
+</body>
+</html>
