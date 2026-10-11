@@ -4,84 +4,114 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rush Hour Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/static/style.css">
   <style>
-    body { padding: 16px; }
-    .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
-    header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
-    h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
-    h1 small { color: var(--muted); font-weight: 500; font-size: 0.9rem; margin-left: 0.4rem; }
-    .main { display: grid; grid-template-columns: 1fr 260px; gap: 16px; }
-    @media (max-width: 760px) { .main { grid-template-columns: 1fr; } .qr { order: -1; } }
+    body { padding: 28px 16px 40px; }
+    .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+
+    header { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; }
+    .brand h1 { margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; }
+    .brand p { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
+    .stats { display: flex; gap: 28px; }
+
+    .main { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+    @media (max-width: 820px) { .main { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+
+    .status-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .event { color: var(--muted); font-size: 0.95rem; flex: 1; min-width: 200px; }
 
     .city { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    @media (max-width: 520px) { .city { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .city { grid-template-columns: 1fr; } }
     .bld {
-      --c: #888;
-      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
-      padding: 14px; display: grid; gap: 10px; position: relative; overflow: hidden;
-      transition: box-shadow 0.3s, border-color 0.3s;
+      --c: #888; position: relative; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px; display: grid; gap: 14px; transition: border-color 0.3s;
     }
-    .bld.target { border-color: var(--c); box-shadow: 0 0 0 2px var(--c), 0 0 32px color-mix(in srgb, var(--c) 40%, transparent); animation: pulse 1s ease-in-out infinite alternate; }
-    .bld.flash { box-shadow: 0 0 60px var(--c); }
-    @keyframes pulse { to { box-shadow: 0 0 0 2px var(--c), 0 0 12px transparent; } }
-    .bld .name { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
-    .bld .tag { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--c); color: #0b0e17; visibility: hidden; }
-    .bld.target .tag, .bld.has-gen .tag { visibility: visible; }
-    .tower { height: 140px; display: flex; align-items: flex-end; justify-content: center; }
-    .tower svg { height: 100%; }
-    .bar { height: 12px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
-    .bar i { display: block; height: 100%; background: var(--c); border-radius: 99px; transition: width 0.15s linear; }
-    .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
-    .bld.low .pct { color: var(--danger); }
-    .bld.dark { filter: saturate(0.2); }
-    .bld.dark .pct { color: var(--danger); font-weight: 700; }
+    .bld::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--c) calc(var(--glow, 0) * 22%), transparent), transparent 70%);
+      transition: opacity 0.3s;
+    }
+    .bld.target, .bld.charging { border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+    .bld .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; position: relative; }
+    .bld .name { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); }
+    .bld .name .dot { color: var(--c); }
+    .bld .pct { font-size: 2.6rem; font-weight: 650; letter-spacing: -0.04em; line-height: 1; position: relative; }
+    .bld .pct small { font-size: 1rem; color: var(--muted); font-weight: 500; margin-left: 2px; }
+    .bld .bar { height: 6px; color: var(--c); position: relative; }
+    .bld.dark .pct { color: var(--faint); }
+    .bld.charging .chip, .bld.target .chip { color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+    .bld.dark .chip { color: var(--danger); background: rgba(255, 107, 107, 0.12); }
+    .bld.target .chip::before, .bld.charging .chip::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.25; } }
 
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
-    .qr { text-align: center; display: grid; gap: 8px; align-content: start; }
-    .qr img { width: 100%; max-width: 220px; margin: 0 auto; border-radius: 10px; background: #fff; padding: 6px; }
-    .qr .url { font-size: 0.75rem; color: var(--muted); word-break: break-all; }
-    .controls { display: grid; gap: 12px; text-align: center; }
-    .admin { border-style: dashed; display: none; }
-    .admin.on { display: grid; gap: 10px; }
-    .admin h2 { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-    a { color: var(--accent); }
+    .controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+    .qr { text-align: center; display: grid; gap: 12px; justify-items: center; }
+    .qr img { width: 100%; max-width: 220px; border-radius: 10px; background: #fff; padding: 8px; aspect-ratio: 1; }
+    .qr .url { font-size: 0.75rem; color: var(--faint); word-break: break-all; }
+    .qr a { color: var(--muted); font-size: 0.85rem; }
+
+    .admin { display: none; gap: 14px; }
+    .admin.on { display: grid; }
+    .admin .feed { width: 100%; border-radius: 10px; background: #000; aspect-ratio: 4 / 3; object-fit: cover; }
+    .verify-status { font-size: 0.85rem; display: flex; gap: 8px; align-items: center; }
+    .verify-status .dot { color: var(--faint); }
+    .verify-status.ok .dot { color: var(--green); }
+    .verify-status.bad .dot { color: var(--danger); }
+    .override-hint { font-size: 0.8rem; color: var(--muted); margin: 0; }
   </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>⚡ Rush Hour <small>keep the city powered</small></h1>
+    <div class="brand">
+      <h1>Rush Hour</h1>
+      <p>Keep the city powered. The robot carries the generator.</p>
+    </div>
     <div class="stats">
-      <div class="stat"><b id="time">-:--</b><span>time left</span></div>
-      <div class="stat"><b id="uptime">100%</b><span>uptime</span></div>
-      <div class="stat"><b id="charges">0</b><span>deliveries</span></div>
-      <div class="stat"><b id="players">0</b><span>players</span></div>
+      <div class="stat"><b id="time">-:--</b><span class="label-caps">Time left</span></div>
+      <div class="stat"><b id="uptime">100%</b><span class="label-caps">Uptime</span></div>
+      <div class="stat"><b id="charges">0</b><span class="label-caps">Deliveries</span></div>
+      <div class="stat"><b id="players">0</b><span class="label-caps">Players</span></div>
     </div>
   </header>
 
   <div class="main">
-    <div style="display:grid; gap:16px; align-content:start">
+    <div style="display:grid; gap:20px">
       <div class="city" id="city"></div>
       <div class="panel controls">
-        <div class="event" id="event">Connecting…</div>
+        <div class="status-row">
+          <span class="chip live" id="phase">Connecting</span>
+          <span class="event" id="event"></span>
+        </div>
         <div class="actions" id="actions"></div>
       </div>
       <div class="panel admin" id="admin">
-        <h2>Operator</h2>
-        <div class="actions">
-          <button class="btn small" id="done">✅ Delivery done</button>
-          <button class="btn small" id="fail">❌ Delivery failed</button>
-          <button class="btn small" id="reset">↺ Reset game</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+          <span class="label-caps">Operator</span>
+          <button class="btn small" id="reset">Reset game</button>
         </div>
-        <div class="event" id="worker"></div>
+        <div class="verify-status" id="verifyStatus"><span class="dot"></span><span></span></div>
+        <img class="feed" id="feed" alt="Verification camera">
+        <div>
+          <div class="label-caps" style="margin-bottom:8px">Generator location</div>
+          <div class="segmented" id="override"></div>
+          <p class="override-hint" id="overrideHint" style="margin-top:8px"></p>
+        </div>
       </div>
     </div>
     <div class="panel qr">
-      <strong>Scan to play in AR</strong>
+      <span class="label-caps">Scan to play</span>
       <img id="qr" alt="QR code for the phone game">
       <div class="url" id="url"></div>
-      <a href="/markers">Marker cards (only for --track cards)</a>
+      <a href="/markers">Marker cards</a>
     </div>
   </div>
 </div>
@@ -91,67 +121,71 @@
   const $ = (id) => document.getElementById(id);
   const admin = new URLSearchParams(location.search).has("admin");
   $("admin").classList.toggle("on", admin);
-  $("done").onclick = () => RushHour.send("done");
-  $("fail").onclick = () => RushHour.send("fail");
   $("reset").onclick = () => RushHour.send("reset");
 
-  // Simple skyscraper whose windows light up with the energy level.
-  function towerSvg(color, energy, seed) {
-    const cols = 4, rows = 7, lit = Math.round((energy / 100) * cols * rows);
-    let windows = "";
-    const order = [...Array(cols * rows).keys()].sort((a, b) => ((a * 7919 + seed) % 31) - ((b * 7919 + seed) % 31));
-    const litSet = new Set(order.slice(0, lit));
-    for (let r = 0; r < rows; r++)
-      for (let c = 0; c < cols; c++) {
-        const on = litSet.has(r * cols + c);
-        windows += `<rect x="${12 + c * 18}" y="${20 + r * 22}" width="10" height="13" rx="2" fill="${on ? color : "#2a3247"}" opacity="${on ? 1 : 0.8}"/>`;
-      }
-    return `<svg viewBox="0 0 96 180"><rect x="4" y="8" width="88" height="172" rx="6" fill="#1d2436" stroke="${energy > 0 ? color : "#444"}" stroke-width="2"/>${windows}</svg>`;
+  // Operator override: Auto follows the camera; anything else forces the location until set back.
+  const OVERRIDES = [["auto", "Auto"], ["red", "Fire Station"], ["green", "Hospital"], ["yellow", "Shelter"], ["table", "Table"]];
+  for (const [id, label] of OVERRIDES) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.dataset.id = id;
+    b.onclick = () => RushHour.send("override", { location: id === "auto" ? null : id });
+    $("override").appendChild(b);
   }
+  if (admin) setInterval(() => { $("feed").src = `/verify.jpg?t=${Date.now()}`; }, 700);
 
   const cards = {};
   function ensureCards(s) {
     if (Object.keys(cards).length) return;
-    s.buildings.forEach((b, i) => {
+    for (const b of s.buildings) {
       const el = document.createElement("div");
       el.className = "bld";
       el.style.setProperty("--c", b.color);
-      el.innerHTML = `<div class="name"><span>${b.name}</span><span class="tag"></span></div>
-        <div class="tower"></div><div class="bar"><i></i></div><div class="pct"></div>`;
+      el.innerHTML = `<div class="head"><span class="name"><span class="dot"></span>${b.name}</span><span class="chip"></span></div>
+        <div class="pct"></div><div class="bar"><i></i></div>`;
       $("city").appendChild(el);
-      cards[b.id] = { el, seed: i * 13 + 5, lastLit: -1 };
-    });
+      cards[b.id] = el;
+    }
   }
+
+  const locName = (s, loc) => loc === "table" ? "on the table" : loc ? `at the ${RushHour.byId(s, loc).name}` : "not seen";
 
   RushHour.onState((s) => {
     RushHour.renderActions($("actions"), s);
-    if (!s) { $("event").textContent = "Disconnected - reconnecting…"; $("event").classList.add("offline"); return; }
-    $("event").classList.remove("offline");
+    $("phase").textContent = RushHour.phaseLabel(s);
+    if (!s) { $("event").textContent = "Disconnected. Reconnecting..."; return; }
     ensureCards(s);
     $("time").textContent = RushHour.fmtTime(s.time_left);
     $("uptime").textContent = `${Math.round(s.uptime * 100)}%`;
     $("charges").textContent = s.charges;
     $("players").textContent = s.players;
     $("event").textContent = s.event;
-    $("worker").textContent = `Robot worker: ${s.worker}` + (s.worker === "manual" && s.phase === "dispatch" && s.target
-      ? ` - move the generator to ${RushHour.byId(s, s.target).name}, then tap Done` : "");
+
+    const v = s.verify;
+    $("feed").style.display = v.kind === "camera" ? "block" : "none";
+    $("verifyStatus").className = `verify-status ${v.ok ? "ok" : "bad"}`;
+    $("verifyStatus").lastElementChild.textContent =
+      `${v.kind === "sim" ? "Simulation" : "Camera"}: ${v.status}. Generator ${locName(s, s.location)}.`;
+    for (const b of $("override").children)
+      b.setAttribute("aria-pressed", String((v.override || "auto") === b.dataset.id));
+    $("overrideHint").textContent = v.override
+      ? "Override active. The camera is ignored until you pick Auto."
+      : "Auto uses the camera. Override only if detection fails during a demo.";
+
     if (s.url && $("url").textContent !== s.url) {
       $("url").textContent = s.url;
       $("qr").src = `/qr.png?u=${encodeURIComponent(s.url)}`;
     }
     for (const b of s.buildings) {
-      const c = cards[b.id], el = c.el;
+      const el = cards[b.id];
       const isTarget = s.phase === "dispatch" && s.target === b.id;
       el.classList.toggle("target", isTarget);
-      el.classList.toggle("has-gen", s.generator_at === b.id && !isTarget);
-      el.classList.toggle("flash", b.just_charged);
-      el.classList.toggle("low", b.energy > 0 && b.energy < 25);
+      el.classList.toggle("charging", b.charging);
       el.classList.toggle("dark", b.energy <= 0);
-      el.querySelector(".tag").textContent = isTarget ? "⚡ incoming" : "generator here";
+      el.style.setProperty("--glow", (b.energy / 100).toFixed(2));
+      el.querySelector(".chip").textContent = RushHour.buildingStatus(s, b);
+      el.querySelector(".pct").innerHTML = `${Math.round(b.energy)}<small>%</small>`;
       el.querySelector(".bar i").style.width = `${b.energy}%`;
-      el.querySelector(".pct").textContent = b.energy <= 0 ? "BLACKOUT" : `${Math.round(b.energy)}% power`;
-      const lit = Math.round(b.energy / 100 * 28);
-      if (lit !== c.lastLit) { c.lastLit = lit; el.querySelector(".tower").innerHTML = towerSvg(b.color, b.energy, c.seed); }
     }
   });
 </script>

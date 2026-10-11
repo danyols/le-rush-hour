@@ -109,7 +109,9 @@ const ColorTrack = (() => {
     ];
     // clockwise on screen (y down), starting from the corner with the smallest angle
     corners.sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
-    return { cx, cy, corners, fill: b.n / (4 * hu * hv), aspect: hu / hv };
+    // angle = major axis direction (radians, screen coords); hu/hv = half lengths along major/minor axes.
+    // A circle on a tilted table shows up as an ellipse with hv/hu = sin(viewing elevation).
+    return { cx, cy, corners, angle, hu, hv, fill: b.n / (4 * hu * hv), aspect: hu / hv };
   }
 
   // Returns { red: {corners, cx, cy, area, fill} | null, green: ..., yellow: ... } in image pixels.

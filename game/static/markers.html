@@ -4,13 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rush Hour Markers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/static/style.css">
   <style>
-    body { padding: 16px; }
-    .note { max-width: 720px; margin: 0 auto 16px; color: var(--muted); line-height: 1.5; }
+    body { padding: 28px 16px; }
+    .note { max-width: 720px; margin: 0 auto 24px; color: var(--muted); line-height: 1.55; }
+    .note h1 { color: var(--text); font-size: 1.4rem; letter-spacing: -0.03em; margin: 0 0 8px; }
     .note b { color: var(--text); }
     .sheet { display: flex; flex-wrap: wrap; gap: 12mm; justify-content: center; }
-    .card { background: #fff; color: #000; padding: 4mm; border-radius: 3mm; text-align: center; border-top: 6mm solid var(--c); }
+    .card { background: #fff; color: #111; padding: 4mm; border-radius: 3mm; text-align: center; border-top: 4mm solid var(--c); font-family: "Inter", system-ui, sans-serif; }
     .card svg { display: block; width: var(--size); height: var(--size); }
     .card .label { font-weight: 800; font-size: 14pt; margin-top: 2mm; }
     .card .id { font-size: 9pt; color: #555; }
@@ -23,6 +26,8 @@
 </head>
 <body>
   <div class="note">
+    <h1>Marker cards</h1>
+    <p>Only needed for the Cards placement mode (Settings on the phone, or <code>--track cards</code>).</p>
     <p><b>Print this page at 100% scale</b> (turn off "fit to page"). Each black square should come out
       <b id="cm"></b> wide. Use <code>?cm=8</code> in the address bar for a different size.</p>
     <p>Put each card next to its building marker on the table, keeping the card <b>flat and outside the robot
@@ -34,9 +39,9 @@
   <script src="/static/vendor/js-aruco2/aruco.js"></script>
   <script>
     const BUILDINGS = [
-      { id: 0, name: "Red Tower", color: "#ff4d5e" },
-      { id: 1, name: "Green Lab", color: "#3ddc84" },
-      { id: 2, name: "Yellow Market", color: "#ffd23f" },
+      { id: 0, name: "Fire Station", color: "#ff5a5f" },
+      { id: 1, name: "Hospital", color: "#2fd38a" },
+      { id: 2, name: "Shelter", color: "#f5c84b" },
     ];
     const cm = parseFloat(new URLSearchParams(location.search).get("cm")) || 6;
     document.getElementById("cm").textContent = `${cm} cm`;
