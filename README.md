@@ -1,4 +1,6 @@
-# MnemArm voice-control prototype
+# le-rush-hour
+
+## Voice-control prototype
 
 A local, text-first control panel for a voice-directed LeRobot demo. It does **not** move the arm yet: it validates a supported command, shows the proposed action, requires confirmation, records a persistent memory entry, and simulates visual verification.
 
