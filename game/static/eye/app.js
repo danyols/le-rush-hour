@@ -60,9 +60,63 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
     clearTimeout(toastTimer);$('toast').hidden=true;updateButtons();
   }
   function recalibrate(){if(!running)return;generation++;showError('');session.begin();clearTimeout(toastTimer);$('toast').hidden=true;}
+  // Hazard banner: says why head motions are being ignored and what to do. A condition must last
+  // WARN_DELAY_MS before it shows (single dropped frames don't flash it). If the tracker can't
+  // re-arm, or the user has moved off their starting spot, it counts down and recalibrates.
+  const WARN_DELAY_MS=400,STUCK_MS=3000,MOVED_MS=1500,COUNTDOWN_MS=3000;
+  let warnKey=null,warnSince=0,quietUntil=0,shownKey=null;
+  function headWarning(now){
+    if(!running||loading)return null;
+    const r=session.reason,{armed}=session.selector,dir=session.direction;
+    let key=null;
+    if(session.phase==='calibrating')key='calibrating';
+    else if(session.phase!=='ready')return null;
+    else if(r==='face')key='face';
+    else if(r==='multiple')key='multiple';
+    else if(r==='position'||r==='distance')key='moved';
+    else if(r==='pose')key='pose';
+    else if(r==='stale')key='stale';
+    // Not re-armed: nearly forward but outside the ±5° zone means "forward" has drifted (recalibrate);
+    // clearly turned (e.g. watching the arm) only gets told to face forward.
+    else if(!armed&&session.selector.allowed.size&&now>=quietUntil&&dir!=='center')key=r==='neutral-zone'?'drift':'notArmed';
+    if(key!==warnKey){warnKey=key;warnSince=now;}
+    if(!key)return null;
+    const held=now-warnSince;
+    if(key!=='calibrating'&&held<WARN_DELAY_MS)return null;
+    const recal=start=>{const left=start+COUNTDOWN_MS-held;if(left<=0){recalibrate();warnKey=null;return 0;}return left;};
+    switch(key){
+      case 'calibrating':return {key,level:'caution',title:'Calibrating · look straight ahead',detail:'Hold still and face forward until the bar fills',bar:session.calibration.progress};
+      case 'face':return {key,level:'danger',title:'Face not detected',detail:'Face the camera and look straight ahead. Head motions are ignored until it sees you.'};
+      case 'multiple':return {key,level:'danger',title:'More than one person in view',detail:'Only the surgeon should be in the camera frame. Head motions are ignored.'};
+      case 'pose':return {key,level:'danger',title:'Face not clearly visible',detail:'Move so your whole face is in view, then look straight ahead.'};
+      case 'stale':return {key,level:'caution',title:'Camera frames stopped',detail:'Waiting for the camera. Pause and resume it if this does not clear.'};
+      case 'moved':{
+        if(held<MOVED_MS)return {key,level:'danger',title:'You moved from your starting spot',detail:'Return to where you were, facing forward.'};
+        const left=recal(MOVED_MS);
+        return left?{key,level:'danger',title:`Recalibrating in ${Math.ceil(left/1000)}…`,detail:'Look straight ahead and hold still.',bar:1-left/COUNTDOWN_MS}:null;
+      }
+      case 'notArmed':return {key,level:'caution',title:'Look forward first',detail:'Face straight ahead for a moment, then make your head motion.'};
+      case 'drift':{
+        if(held<STUCK_MS)return {key,level:'caution',title:'Look forward first',detail:'Face straight ahead for a moment, then make your head motion.'};
+        const left=recal(STUCK_MS);
+        return left?{key,level:'caution',title:`Recalibrating in ${Math.ceil(left/1000)}…`,detail:'Forward is not being recognised. Look straight ahead and hold still.',bar:1-left/COUNTDOWN_MS}:null;
+      }
+    }
+    return null;
+  }
+  function renderWarning(now){
+    const w=headWarning(now),box=$('hazard');
+    box.hidden=!w;$('stage').classList.toggle('warning',!!w);
+    if(!w){shownKey=null;return;}
+    box.classList.toggle('danger',w.level==='danger');box.classList.toggle('caution',w.level==='caution');
+    // Re-announce to screen readers only when the problem changes, not on every countdown tick.
+    if(w.key!==shownKey){shownKey=w.key;box.setAttribute('aria-label',`${w.title}. ${w.detail}`);}
+    text('hazardTitle',w.title);text('hazardDetail',w.detail);
+    $('hazardBar').style.width=`${Math.round((w.bar??0)*100)}%`;$('hazardBar').parentElement.hidden=w.bar==null;
+  }
   const flash=id=>{const el=$(`target-${id}`);el.classList.remove('chosen');void el.offsetWidth;el.classList.add('chosen');setTimeout(()=>el.classList.remove('chosen'),1100);};
   async function confirm(color){
-    flash(color);
+    flash(color);quietUntil=clock.now()+1500;
     const current=generation,target=C.targets[color];
     const selection={id:win.crypto.randomUUID(),color,task:target.task,confirmedAt:new Date().toISOString()};
     sending=adapter.robot;syncMode();
@@ -118,7 +172,7 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
   }
   async function stopRobot(){
     if(robot?.state!=='running')return;
-    flash('down');
+    flash('down');quietUntil=clock.now()+1500;
     robot={...robot,state:'returning'};renderRobot();
     showToast('Sending the arm to rest','The return animation plays once it is back');
     try{robot=await adapter.stop();}catch(error){showError(`Could not stop the robot: ${error.message}`);}
@@ -155,6 +209,7 @@ export function mountHeadControl({doc=document,win=window,media=navigator.mediaD
     }else if(!loading&&robot?.state==='running'){title='Camera off · start it, then look down to send the arm to rest';count='';
     }else if(phase==='paused'&&!loading){title='Camera paused';count='';}
     text('instructionTitle',title);text('instructionCount',count);
+    renderWarning(now);
     scene?.preview(phase==='ready'&&!robotBusy()&&session.selector.armed&&C.targets[session.selector.candidate]?session.selector.candidate:null);
     const angles=session.angles;
     // Live chip: the camera feed plus what the tracker currently recognises.
