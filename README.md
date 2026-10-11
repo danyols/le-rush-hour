@@ -64,6 +64,21 @@ Replace the mock action in `public/app.js` with a request to the policy router. 
 
 The eventual robot service should return `success`, `message`, and ideally camera-verification metadata.
 
+## Laptop head-control console
+
+```bash
+python3 -m game --verify sim --no-tunnel
+```
+
+Open **http://localhost:8000/head-control** on your laptop. Allow the webcam and
+face forward for about two seconds to capture your neutral position. Turn your
+head **left for yellow**, **right for red**, or **up for green** and hold for two
+seconds to confirm. Face forward briefly before choosing again. Looking down is
+unassigned. All selections remain demo-only; nothing is sent to the robot.
+The previous `/eye-control` link opens the same head-control interface.
+
+[Head-control setup, sensitivity and robot adapter](docs/eye-control.md)
+
 ## Rush Hour game (phone AR + game server)
 
 ```bash

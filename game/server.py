@@ -54,6 +54,11 @@ def create_app(game: Game, public_url: dict, track: str = "preview") -> FastAPI:
     async def index():
         return FileResponse(STATIC / "index.html")
 
+    @app.get("/head-control")
+    @app.get("/eye-control")
+    async def eye_control():
+        return FileResponse(STATIC / "eye-control.html")
+
     @app.get("/board")
     async def board():
         return FileResponse(STATIC / "board.html")
