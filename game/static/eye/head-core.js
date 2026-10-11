@@ -28,11 +28,15 @@ export function relativeAngles(pose,reference){
 }
 export function rotationDistance(a,b){return Math.acos(clamp((a.columns.reduce((s,col,i)=>s+dot(col,b.columns[i]),0)-1)/2))*deg;}
 export function positionMatches(pose,reference){return Math.hypot(pose.x-reference.x,pose.y-reference.y)<=C.maxCenterShift&&Math.abs(pose.scale/reference.scale-1)<=C.maxScaleChange;}
-export function classifyHead({yaw,pitch,roll},previous=null){
+// `down` is only a command while the robot runs (it sends the arm to rest).
+export function classifyHead({yaw,pitch,roll},previous=null,{down=false}={}){
   if(![yaw,pitch,roll].every(Number.isFinite)||Math.abs(yaw)>C.maxYaw||Math.abs(pitch)>C.maxPitch||Math.abs(roll)>C.maxRoll)return null;
   if(Math.abs(yaw)<=C.neutralDegrees&&Math.abs(pitch)<=C.neutralDegrees&&Math.abs(roll)<=C.neutralDegrees)return 'center';
-  // Down and diagonal movements have no command. Hysteresis reduces edge jitter.
-  if(pitch< -C.neutralDegrees)return null;
+  // Diagonal movements have no command, nor does down unless enabled. Hysteresis reduces edge jitter.
+  if(pitch< -C.neutralDegrees){
+    if(down&&Math.abs(yaw)<=C.verticalYawLimit&&pitch<= -(previous==='down'?C.pitchExit:C.pitchEnter))return 'down';
+    return null;
+  }
   if(Math.abs(yaw)<=C.verticalYawLimit&&pitch>=(previous==='green'?C.pitchExit:C.pitchEnter))return 'green';
   if(Math.abs(pitch)<=C.horizontalPitchLimit){
     if(yaw>=(previous==='yellow'?C.yawExit:C.yawEnter))return 'yellow';

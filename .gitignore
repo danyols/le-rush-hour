@@ -4,3 +4,4 @@ models/
 outputs/
 *.tar
 __pycache__/
+*.bak

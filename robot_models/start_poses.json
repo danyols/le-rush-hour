@@ -1,0 +1,10 @@
+{
+    "green": {
+        "shoulder_pan": 2.9,
+        "shoulder_lift": -77.3,
+        "elbow_flex": 83.3,
+        "wrist_flex": 54.5,
+        "wrist_roll": -1.5,
+        "gripper": 7.7
+    }
+}

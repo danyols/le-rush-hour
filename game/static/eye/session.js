@@ -3,6 +3,13 @@ import {NeutralCalibration,relativeAngles,positionMatches,classifyHead} from './
 import {DwellSelector} from './dwell.js';
 export class HeadSession {
   constructor(){this.selector=new DwellSelector();this.phase='idle';this.lastTime=null;}
+  // Which directions can be selected: the colors while choosing a marker, only 'down' while the
+  // robot runs, nothing while it returns to rest. Changing it needs a fresh forward hold to rearm.
+  setAllowed(directions){
+    const next=new Set(directions);
+    if([...next].join()===[...this.selector.allowed].join())return;
+    this.selector.allowed=next;this.selector.reset();
+  }
   begin(){this.calibration=new NeutralCalibration();this.model=null;this.phase='calibrating';this.lastTime=null;this.direction=null;this.reason='face';this.angles=null;this.selector.reset();}
   pause(){this.phase='paused';this.model=null;this.direction=null;this.angles=null;this.selector.reset();}
   invalid(reason,time){
@@ -25,11 +32,13 @@ export class HeadSession {
     }
     if(!positionMatches(o.pose,this.model.pose)){this.invalid('position',time);return null;}
     const raw=relativeAngles(o.pose,this.model.pose);
-    // Reject downward, extreme and rolled poses immediately, before smoothing.
-    if(raw.pitch< -C.neutralDegrees||Math.abs(raw.yaw)>C.maxYaw||Math.abs(raw.pitch)>C.maxPitch||Math.abs(raw.roll)>C.maxRoll){this.invalid('unassigned',time);return null;}
+    // Reject downward (unless DOWN is a command), extreme and rolled poses immediately, before smoothing.
+    const down=this.selector.allowed.has('down');
+    if((raw.pitch< -C.neutralDegrees&&!down)||Math.abs(raw.yaw)>C.maxYaw||Math.abs(raw.pitch)>C.maxPitch||Math.abs(raw.roll)>C.maxRoll){this.invalid('unassigned',time);return null;}
     this.angles=this.angles?Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,this.angles[k]+.55*(v-this.angles[k])])):raw;
-    this.direction=classifyHead(this.angles,this.direction);
+    this.direction=classifyHead(this.angles,this.direction,{down});
     if(!this.direction)this.reason='neutral-zone';
+    else if(this.direction!=='center'&&!this.selector.allowed.has(this.direction))this.reason='locked';
     return this.selector.observe(this.direction,time,receivedAt);
   }
   tick(now){
