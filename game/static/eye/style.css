@@ -103,3 +103,26 @@ footer{display:flex;justify-content:space-between;color:#6b818a}
 @keyframes liveBlink{50%{opacity:.15}}
 @keyframes liveRing{50%{box-shadow:0 0 0 2px #dc2626,0 0 0 7px #dc262614}}
 @media(prefers-reduced-motion:reduce){.neutral.live .live-badge i,.neutral.live .live-thumb{animation:none}}
+
+/* Hazard banner: why head motions are being ignored (no face, two people, needs calibration). */
+.hazard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(600px,86%);display:flex;align-items:center;gap:20px;
+  padding:20px 26px 20px 20px;border-radius:18px;border:6px solid transparent;color:#1f2937;
+  background:linear-gradient(#fff8e1,#fff8e1) padding-box,repeating-linear-gradient(-45deg,#f5b400 0 16px,#1f2937 16px 32px) border-box;
+  box-shadow:0 18px 50px #1f293740;animation:hazardPulse 1.4s ease-in-out infinite}
+.hazard[hidden]{display:none}
+.hazard.danger{background:linear-gradient(#fff0ef,#fff0ef) padding-box,repeating-linear-gradient(-45deg,#e0262f 0 16px,#fff 16px 32px) border-box;animation:hazardFlash .7s steps(2,jump-none) infinite}
+.hazard-icon{flex:none;width:68px;height:62px;display:grid;place-items:center;animation:hazardBlink 1.4s steps(2,jump-none) infinite}
+.hazard.danger .hazard-icon{animation-duration:.7s}
+.hazard-icon svg{width:68px;height:62px;filter:drop-shadow(0 0 10px #f5b40099)}
+.hazard-text strong{display:block;font-size:24px;line-height:1.2;font-weight:750;letter-spacing:-.3px}
+.hazard-text p{margin:6px 0 0;font-size:14px;line-height:1.4;color:#3b4652}
+.hazard.danger .hazard-text strong{color:#b4151e}
+.hazard-meter{height:7px;margin-top:12px;border-radius:9px;background:#1f29371f;overflow:hidden}
+.hazard-meter[hidden]{display:none}.hazard-meter i{display:block;height:100%;width:0;background:#1f2937;border-radius:9px;transition:width .1s linear}
+.hazard.danger .hazard-meter i{background:#e0262f}
+.stage.warning .or-layer,.stage.warning .target{filter:saturate(.55) opacity(.75)}
+@keyframes hazardPulse{50%{box-shadow:0 0 0 10px #f5b40040,0 18px 50px #1f293740}}
+@keyframes hazardFlash{0%{box-shadow:0 0 0 0 #e0262f00,0 18px 50px #1f293740}100%{box-shadow:0 0 0 14px #e0262f55,0 0 46px #e0262f99}}
+@keyframes hazardBlink{0%{opacity:1}100%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.hazard,.hazard-icon{animation:none}}
+@media(max-width:760px){.hazard{gap:12px;padding:14px}.hazard-icon,.hazard-icon svg{width:46px;height:42px}.hazard-text strong{font-size:19px}}
